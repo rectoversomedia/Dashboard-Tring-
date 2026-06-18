@@ -1,0 +1,30 @@
+main:
+  steps:
+    - init:
+        assign:
+          - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - region: "asia-southeast2"
+          - extract_job: "extract-appsflyer"
+          - dbt_job: "dbt-transform"
+
+    - run_extracts_parallel:
+        parallel:
+          branches:
+            - extract_appsflyer:
+                steps:
+                  - run_appsflyer:
+                      call: googleapis.run.v1.namespaces.jobs.run
+                      args:
+                        name: ${"namespaces/" + project + "/jobs/" + extract_job}
+                        location: ${region}
+                      result: appsflyer_result
+
+    - run_dbt:
+        call: googleapis.run.v1.namespaces.jobs.run
+        args:
+          name: ${"namespaces/" + project + "/jobs/" + dbt_job}
+          location: ${region}
+        result: dbt_result
+
+    - done:
+        return: "Pipeline complete"
