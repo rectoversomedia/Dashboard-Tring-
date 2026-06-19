@@ -6,7 +6,7 @@ with source as (
 
 typed as (
     select
-        `Appsflyer ID`                                      as appsflyer_id,
+        `AppsFlyer ID`                                      as appsflyer_id,
         safe_cast(`Install Time` as timestamp)              as install_time,
         date(safe_cast(`Install Time` as timestamp))        as install_date,
         `Media Source`                                      as media_source,
@@ -14,7 +14,7 @@ typed as (
         `Campaign ID`                                       as campaign_id,
         `Country Code`                                      as country_code,
         `Platform`                                          as platform,
-        `Blocked Reason`                                    as blocked_reason,
+        `Attributed Touch Type`                             as blocked_reason,
         _platform,
         _app_id,
         _ingested_at,

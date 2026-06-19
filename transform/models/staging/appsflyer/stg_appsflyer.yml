@@ -3,13 +3,14 @@ version: 2
 models:
   - name: stg_appsflyer_installs
     description: "Typed, deduped installs. One row per appsflyer_id per install_date per platform."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          name: stg_appsflyer_installs_unique_key
+          combination_of_columns: ["appsflyer_id", "install_date", "_platform"]
     columns:
       - name: appsflyer_id
         tests:
           - not_null
-          - unique:
-              name: stg_appsflyer_installs_unique_key
-              combination_of_columns: ["appsflyer_id", "install_date", "_platform"]
       - name: install_date
         tests:
           - not_null

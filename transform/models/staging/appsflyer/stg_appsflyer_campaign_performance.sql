@@ -6,10 +6,10 @@ with source as (
 
 typed as (
     select
-        safe_cast(`Date` as date)                   as date,
-        `Media Source`                              as media_source,
-        `Campaign`                                  as campaign,
-        `Geo`                                       as country_code,
+        date(safe_cast(`Install Time` as timestamp))    as date,
+        `Media Source`                                  as media_source,
+        `Campaign`                                      as campaign,
+        `GEO`                                           as country_code,
         safe_cast(`Impressions` as int64)           as impressions,
         safe_cast(`Clicks` as int64)                as clicks,
         safe_cast(`Installs` as int64)              as installs,
