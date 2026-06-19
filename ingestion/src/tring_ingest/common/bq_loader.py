@@ -62,6 +62,18 @@ def load_csv_to_raw(
     run_id = str(uuid.uuid4())
     ingested_at = datetime.now(UTC).isoformat()
 
+    # Auto-create dataset if it doesn't exist (safe for multi-env migration)
+    from google.api_core.exceptions import Conflict
+    dataset_ref = bigquery.Dataset(f"{project_id}.{dataset_id}")
+    dataset_ref.location = "asia-southeast2"
+    try:
+        client.create_dataset(dataset_ref, exists_ok=True)
+    except Conflict:
+        pass
+
+    # Strip UTF-8 BOM if present (AppsFlyer CSV responses include ﻿ at start)
+    csv_content = csv_content.lstrip("﻿")
+
     reader = csv.DictReader(io.StringIO(csv_content))
     source_columns = reader.fieldnames or []
 
