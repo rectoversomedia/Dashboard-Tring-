@@ -1,7 +1,7 @@
 substitutions:
   _ENV: prod
   _REGION: asia-southeast2
-  _PROJECT: dashboard-tring-prod
+  _PROJECT: CLIENT_GCP_PROJECT  # set by client — override via Cloud Build substitution
   _REGISTRY: asia-southeast2-docker.pkg.dev
   _REPO: tring-service
 

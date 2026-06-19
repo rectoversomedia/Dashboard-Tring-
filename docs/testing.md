@@ -137,7 +137,7 @@ What `make test` does: runs pytest and dbt parse in sequence. Fails fast if eith
 
 ## 6. Integration Tests (requires GCP dev access)
 
-These run against the real `dashboard-tring-dev` GCP project. Only run after local tests pass.
+These run against the real `hypefast-data-staging` GCP project. Only run after local tests pass.
 
 ### Run the extractor locally against dev BQ
 
@@ -160,7 +160,7 @@ What it does: runs all models (seed, staging, mart) and all tests against the de
 ### Verify BQ tables after a run
 
 ```bash
-bq query --project_id=dashboard-tring-dev \
+bq query --project_id=hypefast-data-staging \
   'SELECT COUNT(*) as rows, MAX(_ingested_at) as latest FROM appsflyer_raw.raw_installs'
 ```
 

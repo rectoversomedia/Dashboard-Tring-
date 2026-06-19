@@ -7,7 +7,7 @@ resource "google_artifact_registry_repository" "images" {
   location      = var.region
   repository_id = var.repo_name
   format        = "DOCKER"
-  description   = "Container images for Tring! data pipeline"
+  description   = "Container images for Dashboard Monitoring & AI Insight data pipeline"
 }
 
 output "registry_url" {

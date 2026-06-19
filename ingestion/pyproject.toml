@@ -1,7 +1,7 @@
 [project]
 name = "tring-ingest"
 version = "0.1.0"
-description = "Tring! data pipeline ingestion layer"
+description = "Dashboard Monitoring & AI Insight — data pipeline ingestion layer"
 requires-python = ">=3.12"
 dependencies = [
     "requests>=2.32",

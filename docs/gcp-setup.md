@@ -4,7 +4,7 @@ One-time provisioning steps for each GCP project (dev or prod). Run as a user wi
 
 Set project once:
 ```bash
-export PROJECT=hypefast-data-staging   # or dashboard-tring-prod
+export PROJECT=hypefast-data-staging   # dev; prod = client GCP project (deployed via GitLab + VPN)
 ```
 
 ---

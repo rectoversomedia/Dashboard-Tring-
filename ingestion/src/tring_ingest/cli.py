@@ -11,7 +11,7 @@ SOURCES = ["appsflyer", "moengage", "play_console", "app_store"]
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="Tring! data pipeline ingestion")
+    parser = argparse.ArgumentParser(description="Dashboard Monitoring & AI Insight — data pipeline ingestion")
     parser.add_argument("--source", required=True, choices=SOURCES, help="Data source to extract")
     parser.add_argument("--from", dest="date_from", required=True, help="Start date YYYY-MM-DD")
     parser.add_argument("--to", dest="date_to", required=True, help="End date YYYY-MM-DD")
@@ -19,6 +19,10 @@ def parse_args(argv=None):
 
 
 def main(argv=None):
+    import os
+    if not os.environ.get("GCP_PROJECT"):
+        raise SystemExit("ERROR: GCP_PROJECT environment variable is required. Set it before running.")
+
     args = parse_args(argv)
     logger.info(
         "Starting extraction",

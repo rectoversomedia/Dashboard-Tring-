@@ -57,7 +57,7 @@ class TestBqLoader:
                 platform="android",
                 date_from="2026-06-13",
                 date_to="2026-06-14",
-                project_id="dashboard-tring-dev",
+                project_id="hypefast-data-staging",
             )
         assert result == 0
 
@@ -87,7 +87,7 @@ class TestBqLoader:
                 platform="android",
                 date_from="2026-06-13",
                 date_to="2026-06-14",
-                project_id="dashboard-tring-dev",
+                project_id="hypefast-data-staging",
             )
 
         assert len(loaded_rows) == 1
@@ -126,7 +126,7 @@ class TestBqLoader:
                 date_from="2026-06-13",
                 date_to="2026-06-14",
                 expected_columns=["Install Time", "Media Source", "Campaign"],
-                project_id="dashboard-tring-dev",
+                project_id="hypefast-data-staging",
             )
 
         assert loaded_rows[0]["_schema_flag"] != ""
@@ -157,7 +157,7 @@ class TestBqLoader:
                 date_from="2026-06-13",
                 date_to="2026-06-14",
                 expected_columns=["Install Time", "Media Source"],
-                project_id="dashboard-tring-dev",
+                project_id="hypefast-data-staging",
             )
 
         assert loaded_rows[0]["_schema_flag"] == ""

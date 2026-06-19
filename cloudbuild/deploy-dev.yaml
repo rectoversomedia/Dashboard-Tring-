@@ -1,7 +1,7 @@
 substitutions:
   _ENV: dev
   _REGION: asia-southeast2
-  _PROJECT: dashboard-tring-dev
+  _PROJECT: hypefast-data-staging
   _REGISTRY: asia-southeast2-docker.pkg.dev
   _REPO: tring-service
 

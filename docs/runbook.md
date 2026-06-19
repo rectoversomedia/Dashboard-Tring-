@@ -1,18 +1,18 @@
-# Runbook: Tring! Data Pipeline
+# Runbook: Dashboard Monitoring & AI Insight — Data Pipeline
 
 ## 1. Triggering a manual pipeline run
 
 ```bash
 gcloud workflows run pipeline \
   --location=asia-southeast2 \
-  --project=dashboard-tring-dev
+  --project=$PROJECT
 ```
 
 Watch execution:
 ```bash
 gcloud workflows executions list pipeline \
   --location=asia-southeast2 \
-  --project=dashboard-tring-dev \
+  --project=$PROJECT \
   --limit=5
 ```
 
@@ -21,7 +21,7 @@ gcloud workflows executions list pipeline \
 ```bash
 gcloud run jobs execute extract-appsflyer \
   --region=asia-southeast2 \
-  --project=dashboard-tring-dev \
+  --project=$PROJECT \
   --update-env-vars="FROM_DATE=2026-06-13,TO_DATE=2026-06-14"
 ```
 
@@ -29,7 +29,7 @@ Check logs:
 ```bash
 gcloud logging read \
   'resource.type="cloud_run_job" AND resource.labels.job_name="extract-appsflyer"' \
-  --project=dashboard-tring-dev \
+  --project=$PROJECT \
   --limit=50 \
   --format=json
 ```
@@ -42,7 +42,7 @@ Run the extractor job with a wider date window. Raw is append-only; staging dedu
 # Example: backfill last 30 days
 gcloud run jobs execute extract-appsflyer \
   --region=asia-southeast2 \
-  --project=dashboard-tring-dev \
+  --project=$PROJECT \
   --update-env-vars="FROM_DATE=2026-05-01,TO_DATE=2026-05-31"
 ```
 
@@ -50,7 +50,7 @@ After extract completes, re-run dbt to rebuild staging and mart:
 ```bash
 gcloud run jobs execute dbt-transform \
   --region=asia-southeast2 \
-  --project=dashboard-tring-dev
+  --project=$PROJECT
 ```
 
 ## 4. Rotating the AppsFlyer API token
@@ -59,20 +59,20 @@ gcloud run jobs execute dbt-transform \
 # Add a new version (old version stays until you destroy it)
 echo -n "NEW_TOKEN_VALUE" | gcloud secrets versions add appsflyer-api-token \
   --data-file=- \
-  --project=dashboard-tring-dev
+  --project=$PROJECT
 
 # Verify new version is active
-gcloud secrets versions list appsflyer-api-token --project=dashboard-tring-dev
+gcloud secrets versions list appsflyer-api-token --project=$PROJECT
 
 # Disable old version after confirming new one works
 gcloud secrets versions disable VERSION_NUMBER \
   --secret=appsflyer-api-token \
-  --project=dashboard-tring-dev
+  --project=$PROJECT
 ```
 
 ## 5. Reading alerts
 
-Alerts go to `cuanpintar.vendor.sapti@pegadaian.co.id`. When an alert fires:
+When an alert fires:
 
 1. Check Cloud Workflows execution: `gcloud workflows executions list pipeline ...`
 2. Find the failed step and check Cloud Logging for that job.
@@ -104,11 +104,12 @@ dbt source freshness --profiles-dir . --target dev
 ## 8. Deploying a change
 
 ```bash
-# Dev
-make deploy ENV=dev
+# Dev — push to GitHub, Cloud Build triggers automatically
+git push origin main
 
-# Prod (after dev is green)
-make deploy ENV=prod
+# Prod — push to client GitLab (VPN required)
+# Cloud Build on client GCP picks up the push and deploys
+git push client-gitlab main
 ```
 
 ## 9. Terraform state
@@ -116,7 +117,7 @@ make deploy ENV=prod
 State is local by default. For team use, configure GCS backend in `infra/envs/dev/main.tf`:
 ```hcl
 backend "gcs" {
-  bucket = "tring-tf-state-dev"
+  bucket = "tf-state-dev"
   prefix = "terraform/state"
 }
 ```
