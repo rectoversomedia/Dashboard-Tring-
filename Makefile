@@ -1,12 +1,14 @@
 SHELL := /bin/bash
 ENV ?= dev
-REGION := asia-southeast2
-PROJECT_DEV := dashboard-tring-dev
-PROJECT_PROD := dashboard-tring-prod
-REGISTRY := $(REGION)-docker.pkg.dev
-REPO := tring-service
+REGION ?= asia-southeast2
+# Override PROJECT_DEV / PROJECT_PROD via env var or make arg for multi-env migration
+PROJECT_DEV ?= dashboard-tring-dev
+PROJECT_PROD ?= dashboard-tring-prod
+REGISTRY ?= $(REGION)-docker.pkg.dev
+REPO ?= tring-service
 
-PROJECT := $(if $(filter prod,$(ENV)),$(PROJECT_PROD),$(PROJECT_DEV))
+# Allow full PROJECT override: make run-appsflyer-local PROJECT=hypefast-data-staging
+PROJECT ?= $(if $(filter prod,$(ENV)),$(PROJECT_PROD),$(PROJECT_DEV))
 IMAGE_INGESTION := $(REGISTRY)/$(PROJECT)/$(REPO)/ingestion
 IMAGE_DBT := $(REGISTRY)/$(PROJECT)/$(REPO)/dbt
 

@@ -58,6 +58,10 @@ tring-data-pipeline/
 | dev  | dashboard-tring-dev  |
 | prod | dashboard-tring-prod |
 
+## GCP Setup
+
+See [docs/gcp-setup.md](docs/gcp-setup.md) for full provisioning steps: APIs, service accounts, IAM roles, secrets, Artifact Registry, and BigQuery datasets.
+
 ## Adding a New Source
 
 See `docs/runbook.md` section "Adding a source".
