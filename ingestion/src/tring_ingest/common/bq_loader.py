@@ -1,13 +1,15 @@
 """Load CSV rows into BigQuery raw as all STRING plus ingestion metadata."""
 
+import contextlib
 import csv
 import io
 import uuid
 from datetime import UTC, datetime
 
+from google.api_core.exceptions import Conflict
 from google.cloud import bigquery
 
-from tring_ingest.common.config import GCP_PROJECT
+from tring_ingest.common.config import GCP_PROJECT, REGION
 from tring_ingest.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -63,13 +65,10 @@ def load_csv_to_raw(
     ingested_at = datetime.now(UTC).isoformat()
 
     # Auto-create dataset if it doesn't exist (safe for multi-env migration)
-    from google.api_core.exceptions import Conflict
     dataset_ref = bigquery.Dataset(f"{project_id}.{dataset_id}")
-    dataset_ref.location = "asia-southeast2"
-    try:
+    dataset_ref.location = REGION
+    with contextlib.suppress(Conflict):
         client.create_dataset(dataset_ref, exists_ok=True)
-    except Conflict:
-        pass
 
     # Strip UTF-8 BOM if present (AppsFlyer CSV responses include ﻿ at start)
     csv_content = csv_content.lstrip("﻿")
