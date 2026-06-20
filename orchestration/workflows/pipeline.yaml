@@ -10,7 +10,7 @@ main:
 
     - resolve_dates:
         switch:
-          - condition: ${("date_from" in args) and ("date_to" in args)}
+          - condition: ${args != null and "date_from" in args and "date_to" in args}
             steps:
               - use_input_dates:
                   assign:
@@ -48,7 +48,49 @@ main:
           as: e
           steps:
             - fail_appsflyer:
-                raise: ${"extract-appsflyer failed"}
+                raise: "extract-appsflyer failed to start"
+
+    - get_extract_execution_name:
+        assign:
+          - extract_execution: ${appsflyer_result.body.metadata.name}
+
+    - wait_for_extract:
+        steps:
+          - poll_extract:
+              call: http.get
+              args:
+                url: ${"https://run.googleapis.com/v2/" + extract_execution}
+                auth:
+                  type: OAuth2
+              result: poll_result
+          - check_extract_state:
+              switch:
+                - condition: ${"reconciling" in poll_result.body and poll_result.body.reconciling == true}
+                  steps:
+                    - sleep_reconciling:
+                        call: sys.sleep
+                        args:
+                          seconds: 15
+                    - retry_reconciling:
+                        next: poll_extract
+                - condition: ${poll_result.body.conditions[0].state == "CONDITION_SUCCEEDED" and "succeededCount" in poll_result.body and poll_result.body.succeededCount == poll_result.body.taskCount}
+                  next: run_dbt
+                - condition: ${poll_result.body.conditions[0].state == "CONDITION_SUCCEEDED"}
+                  steps:
+                    - fail_extract_partial:
+                        raise: "extract-appsflyer completed but not all tasks succeeded"
+                - condition: ${poll_result.body.conditions[0].state == "CONDITION_FAILED"}
+                  steps:
+                    - fail_extract_execution:
+                        raise: "extract-appsflyer execution failed"
+                - condition: true
+                  steps:
+                    - sleep_before_retry:
+                        call: sys.sleep
+                        args:
+                          seconds: 15
+                    - retry_poll:
+                        next: poll_extract
 
     - run_dbt:
         try:
@@ -63,7 +105,49 @@ main:
           as: e
           steps:
             - fail_dbt:
-                raise: ${"dbt-transform failed"}
+                raise: "dbt-transform failed to start"
+
+    - get_dbt_execution_name:
+        assign:
+          - dbt_execution: ${dbt_result.body.metadata.name}
+
+    - wait_for_dbt:
+        steps:
+          - poll_dbt:
+              call: http.get
+              args:
+                url: ${"https://run.googleapis.com/v2/" + dbt_execution}
+                auth:
+                  type: OAuth2
+              result: dbt_poll_result
+          - check_dbt_state:
+              switch:
+                - condition: ${"reconciling" in dbt_poll_result.body and dbt_poll_result.body.reconciling == true}
+                  steps:
+                    - sleep_dbt_reconciling:
+                        call: sys.sleep
+                        args:
+                          seconds: 15
+                    - retry_dbt_reconciling:
+                        next: poll_dbt
+                - condition: ${dbt_poll_result.body.conditions[0].state == "CONDITION_SUCCEEDED" and "succeededCount" in dbt_poll_result.body and dbt_poll_result.body.succeededCount == dbt_poll_result.body.taskCount}
+                  next: done
+                - condition: ${dbt_poll_result.body.conditions[0].state == "CONDITION_SUCCEEDED"}
+                  steps:
+                    - fail_dbt_partial:
+                        raise: "dbt-transform completed but not all tasks succeeded"
+                - condition: ${dbt_poll_result.body.conditions[0].state == "CONDITION_FAILED"}
+                  steps:
+                    - fail_dbt_execution:
+                        raise: "dbt-transform execution failed"
+                - condition: true
+                  steps:
+                    - sleep_before_dbt_retry:
+                        call: sys.sleep
+                        args:
+                          seconds: 15
+                    - retry_dbt_poll:
+                        next: poll_dbt
 
     - done:
         return: ${"Pipeline complete for " + date_from + " to " + date_to}
