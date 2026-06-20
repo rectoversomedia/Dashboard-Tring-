@@ -36,13 +36,9 @@ steps:
     args: ["push", "--all-tags", "${_REGISTRY}/${_PROJECT}/${_REPO}/dbt"]
     waitFor: ["build-dbt"]
 
-  - name: "hashicorp/terraform:1.5"
-    id: tf-apply
-    entrypoint: terraform
-    args: ["apply", "-var-file=terraform.tfvars", "-auto-approve"]
-    dir: infra/envs/prod
-    waitFor: ["push-ingestion", "push-dbt"]
-
+  # Cloud Run Jobs, Workflow, and Scheduler are provisioned once via gcloud
+  # (docs/gcp-setup.md steps 8-10). Cloud Build only rolls the new image onto the
+  # existing jobs on each push. No Terraform in the deploy path.
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-appsflyer-job
     entrypoint: gcloud
@@ -54,7 +50,7 @@ steps:
       - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion:$COMMIT_SHA
       - --region=${_REGION}
       - --project=${_PROJECT}
-    waitFor: ["tf-apply"]
+    waitFor: ["push-ingestion"]
 
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-dbt-job
@@ -67,7 +63,7 @@ steps:
       - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/dbt:$COMMIT_SHA
       - --region=${_REGION}
       - --project=${_PROJECT}
-    waitFor: ["tf-apply"]
+    waitFor: ["push-dbt"]
 
 options:
   logging: CLOUD_LOGGING_ONLY
