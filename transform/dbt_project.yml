@@ -14,11 +14,12 @@ models:
   tring_transform:
     staging:
       +materialized: view
-      +schema: appsflyer_staging
+      +schema: staging
       appsflyer:
         +tags: ["appsflyer", "staging"]
     marts:
       +materialized: table
+      +schema: mart
       appsflyer:
         +tags: ["appsflyer", "mart"]
         mart_appsflyer_install_attribution:
@@ -49,4 +50,4 @@ models:
 
 seeds:
   tring_transform:
-    +schema: appsflyer_staging
+    +schema: staging
