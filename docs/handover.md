@@ -153,7 +153,7 @@ See `docs/runbook.md` for:
 - Manual pipeline trigger
 - Backfilling historical data
 - Rotating API tokens
-- Reading alerts
+- Checking for failures (no alerting provisioned)
 - Adding a new source
 
 ---

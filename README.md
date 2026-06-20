@@ -90,7 +90,7 @@ gcloud workflows run pipeline \
 
 **Date handling:** Workflow auto-computes yesterday when no dates are passed. Pass `date_from`/`date_to` in `--data` to override for backfill.
 
-See [docs/runbook.md](docs/runbook.md) for full ops procedures: manual triggers, backfill, log reading, token rotation, and alerts.
+See [docs/runbook.md](docs/runbook.md) for full ops procedures: manual triggers, backfill, log reading, token rotation, and checking for failures.
 
 ## Data Catalog
 

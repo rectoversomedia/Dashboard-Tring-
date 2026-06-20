@@ -143,7 +143,7 @@ gcloud artifacts docker images list asia-southeast2-docker.pkg.dev/${PROJECT}/tr
 
 ## 8. Deploy Cloud Run Jobs
 
-> **Note on date args:** `--from`/`--to` are not set at job creation. Cloud Workflows injects them at runtime via `containerOverrides`. For manual backfill, use `gcloud run jobs execute` with `--args` override (see runbook section 3).
+> **Note on date args:** dates are not set at job creation. Cloud Workflows injects them at runtime via `containerOverrides.env` (`DATE_FROM`/`DATE_TO`). For manual backfill, use `gcloud run jobs execute` with `--update-env-vars="DATE_FROM=...,DATE_TO=..."` (see runbook section 3).
 
 ```bash
 REGISTRY=asia-southeast2-docker.pkg.dev

@@ -265,36 +265,38 @@ Multiple job executions during OOM debugging consumed the 12-call daily quota fo
 | Staging | `appsflyer_staging` | Views (no materialization) | dbt |
 | Mart | `appsflyer_mart` | Tables (full refresh each run) | dbt |
 
-> Tiga dataset terpisah per layer. dbt resolve staging/mart dari base name + `+schema` per folder (base `appsflyer`, `+schema: staging` atau `mart` di `dbt_project.yml`). Staging = `stg_*`, mart = `mart_*`.
+> Three separate datasets, one per layer. dbt resolves staging/mart from a base name + per-folder `+schema` (base `appsflyer`, `+schema: staging` or `mart` in `dbt_project.yml`). Staging = `stg_*`, mart = `mart_*`.
 
 ---
 
 ## SCD Strategy
 
-**Tidak ada SCD (Slowly Changing Dimensions).** Semua tables adalah fact tables, bukan dimensi.
+**No SCD (Slowly Changing Dimensions).** All tables are fact tables, not dimensions.
 
 | Layer | Strategy | Detail |
 |---|---|---|
-| Raw | Append-only | Setiap extract run append rows baru. Duplikat bisa ada jika job re-run. |
-| `stg_appsflyer_installs` | Dedup (SCD-0) | `QUALIFY ROW_NUMBER() OVER (PARTITION BY appsflyer_id, install_date, _platform ORDER BY _ingested_at DESC) = 1`  -  ambil 1 row terbaru per device per hari. History tidak di-track. |
-| `stg_appsflyer_in_app_events` | No dedup | Semua events diambil as-is. Event bisa duplikat jika raw duplikat. |
+| Raw | Append-only | Each extract run appends new rows. Duplicates can occur if a job re-runs. |
+| `stg_appsflyer_installs` | Dedup (SCD-0) | `QUALIFY ROW_NUMBER() OVER (PARTITION BY appsflyer_id, install_date, _platform ORDER BY _ingested_at DESC) = 1`  -  keeps 1 latest row per device per day. History is not tracked. |
+| `stg_appsflyer_in_app_events` | No dedup | All events taken as-is. Events can be duplicated if raw is duplicated. |
 | `stg_appsflyer_blocked_installs` | Dedup by appsflyer_id + install_date | Same pattern as installs. |
-| Mart | Full refresh | DROP + CREATE TABLE setiap dbt build. Tidak ada incremental. |
+| Mart | Full refresh | DROP + CREATE TABLE every dbt build. No incremental. |
 
 ---
 
-## dbt Tests (63 total  -  PASS=63 WARN=0 ERROR=0)
+## dbt Tests (53 tests  -  part of `dbt build` PASS=63 WARN=0 ERROR=0)
 
-| Test type | Count | Contoh yang dicek |
+> `dbt build` reports **PASS=63** = 53 tests + 4 staging views + 5 mart tables + 1 seed (63 nodes total). The counts below are the **test** count only (53), exact from the manifest.
+
+| Test type | Count | Example checks |
 |---|---|---|
-| `not_null` | ~20 | `appsflyer_id`, `install_date`, `media_source`, `platform` tidak boleh NULL |
-| `accepted_values` | 4 | `_platform` ∈ {android, ios}; `event_category` ∈ {open_app, login, purchase, registrations} |
-| `unique_combination_of_columns` | 1 | `stg_appsflyer_installs`: appsflyer_id + install_date + platform unik (verifikasi dedup) |
-| `accepted_range` | ~10 | Numeric columns ≥ 0: impressions, clicks, installs, cost, fraud_rate, cohort_size, dll |
+| `not_null` | 32 | `appsflyer_id`, `install_date`, `media_source`, `platform`, mart dimensions must not be NULL |
+| `accepted_range` | 11 | Numeric columns ≥ 0: impressions, clicks, installs, cost, fraud_rate, cohort_size, etc. |
+| `accepted_values` | 5 | `_platform` ∈ {android, ios}; `event_category` ∈ {open_app, login, purchase, registrations} |
 | `expression_is_true` | 4 | Staging campaign_performance: impressions/clicks/installs/cost >= 0 |
-| **Total** | **63** | |
+| `unique_combination_of_columns` | 1 | `stg_appsflyer_installs`: appsflyer_id + install_date + platform unique (verifies dedup) |
+| **Total tests** | **53** | (+ 9 models + 1 seed = 63 build steps) |
 
-> `event_category` test pakai `severity: warn`  -  event names tidak ada di seed mapping akan di-warn, bukan error. Ini expected karena AppsFlyer bisa kirim event baru yang belum di-map.
+> The `event_category` test uses `severity: warn`  -  event names not in the seed mapping are warned, not errored. This is expected because AppsFlyer can send new events not yet mapped.
 
 ---
 
