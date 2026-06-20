@@ -6,11 +6,13 @@ Data pipeline for multi-source mobile app analytics. Sources: AppsFlyer, MoEngag
 
 ```
   -> Cloud Workflows
-      -> [parallel] Cloud Run Jobs (extract per source)
+      -> Cloud Run Job (extract-appsflyer  -  8 pulls: 4 endpoints x 2 platforms)
       -> Cloud Run Job (dbt transform)
-  -> BigQuery (raw -> staging -> mart)
-  -> Looker Studio (mart layer)
+  -> BigQuery (raw -> staging/mart)
+  -> Looker Studio (mart tables)
 ```
+
+> Currently one extract job (AppsFlyer). When more sources are added (MoEngage, Play Console, App Store Connect), the workflow fans them out as parallel branches  -  one Cloud Run Job per source.
 
 Region: `asia-southeast2` (Jakarta). Environments: `dev` (consultant GCP project), `prod` (client GCP  -  deployed via GitLab + VPN).
 

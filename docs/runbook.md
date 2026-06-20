@@ -156,13 +156,15 @@ AppsFlyer limits: `in_app_events` 12 calls/day/app, `installs` 24/day/app. When 
 
 ---
 
-## 7. Reading alerts
+## 7. Checking for failures (no alerting provisioned)
 
-When an alert fires:
+There is no automated alert. Failures surface as a `FAILED` Workflow execution. Check periodically, or after a scheduled run:
 
-1. Check Cloud Workflows execution: `gcloud workflows executions list pipeline --location=asia-southeast2 --project=$PROJECT`
-2. Check Workflow error message  -  it names which step failed
+1. List executions: `gcloud workflows executions list pipeline --location=asia-southeast2 --project=$PROJECT --limit=5`
+2. A `FAILED` state names which step failed in its error message  -  describe it: `gcloud workflows executions describe EXECUTION_ID --workflow=pipeline --location=asia-southeast2 --project=$PROJECT`
 3. Check Cloud Logging for that job (sections 2-3 above)
+
+> **To add email/Slack alerting (optional):** create a Cloud Monitoring alert policy on metric `workflows.googleapis.com/finished_execution_count` filtered to `status="FAILED"`, attached to a notification channel (email/Slack/PagerDuty). This was left out of the initial handover scope.
 
 Common causes:
 - **HTTP 401**: AppsFlyer token expired → rotate token (Section 5)

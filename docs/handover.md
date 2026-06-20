@@ -27,13 +27,19 @@ Run all commands from `docs/gcp-setup.md` against the client's GCP project:
 export PROJECT=YOUR_CLIENT_GCP_PROJECT_ID
 ```
 
-Then run sections 1–6 of `docs/gcp-setup.md` in order:
+Then run sections 1–10 of `docs/gcp-setup.md` in order:
 1. Enable APIs
 2. Create service accounts
 3. Grant IAM roles
 4. Create secrets (AppsFlyer token  -  see note below)
 5. Create Artifact Registry repository
 6. Create BigQuery datasets
+7. Build and push container images
+8. Create Cloud Run Jobs (extract-appsflyer, dbt-transform)
+9. Deploy Cloud Workflows (pipeline)
+10. Create Cloud Scheduler jobs (twice-daily trigger)
+
+> Steps 7-10 create the runtime resources (jobs, workflow, scheduler) once. After this, Cloud Build (Steps 2-5 below) only rolls new images onto the existing jobs on each git push  -  it does not re-create them.
 
 > **Secret note:** The consultant never needs to see the production AppsFlyer token. The client's admin retrieves the token directly from the AppsFlyer dashboard (Configuration > API Token v3) and adds it to Secret Manager themselves.
 
@@ -100,8 +106,9 @@ gcloud builds submit --config=cloudbuild/deploy-prod.yaml \
 This will:
 1. Build ingestion image and push to Artifact Registry
 2. Build dbt image and push to Artifact Registry
-3. Apply Terraform (Cloud Run Jobs, Workflows, Scheduler)
-4. Deploy updated images to Cloud Run Jobs
+3. Roll the new images onto the existing Cloud Run Jobs (`gcloud run jobs update`)
+
+> The jobs, workflow, and scheduler already exist from Step 1 (gcp-setup.md steps 8-10). Cloud Build does not create infrastructure  -  it only updates the job images.
 
 ---
 
@@ -123,7 +130,7 @@ gcloud workflows executions list pipeline \
   --limit=5
 ```
 
-Expected: all 4 extract jobs succeed, then dbt-transform succeeds.
+Expected: `state: SUCCEEDED`. One extract-appsflyer job runs (it pulls 8 reports internally  -  4 endpoints x 2 platforms), then dbt-transform runs (`PASS=63 WARN=0 ERROR=0`). See `docs/runbook.md` section 2 for how to verify each stage.
 
 ---
 
@@ -131,10 +138,12 @@ Expected: all 4 extract jobs succeed, then dbt-transform succeeds.
 
 | Event | What happens automatically |
 |---|---|
-| Push to `main` on GitLab | Cloud Build trigger fires → build images → deploy Cloud Run Jobs |
-| Cloud Scheduler (twice daily) | Triggers Cloud Workflows → runs 4 extractors in parallel → runs dbt |
-| Extractor failure | Cloud Workflows retries, then marks step failed → Cloud Monitoring alert fires |
-| dbt test failure | Job exits non-zero → Workflows marks failed → alert fires |
+| Push to `main` on GitLab | Cloud Build trigger fires → build images → roll new images onto Cloud Run Jobs |
+| Cloud Scheduler (twice daily) | Triggers Cloud Workflows → runs extract-appsflyer (8 pulls) → runs dbt |
+| Extractor failure | Workflow polling detects non-success, marks the execution `FAILED` (dbt does NOT run) |
+| dbt test failure | Job exits non-zero → Workflow marks the execution `FAILED` |
+
+> **Alerting is not provisioned.** Failures surface as a `FAILED` Workflow execution, visible via `gcloud workflows executions list` or the Console. Email/Slack alerting on failure is out of scope for the initial handover  -  if the client wants it, add a Cloud Monitoring alert policy on the `workflows.googleapis.com/finished_execution_count` metric (filtered to `status=FAILED`) with a notification channel. See runbook.md section 7.
 
 ---
 
@@ -154,11 +163,11 @@ See `docs/runbook.md` for:
 | Artifact | Location |
 |---|---|
 | All pipeline code | GitLab repo (this repo) |
-| GCP provisioning guide | `docs/gcp-setup.md` |
+| GCP provisioning guide | `docs/gcp-setup.md` (authoritative deploy method  -  gcloud) |
 | This handover guide | `docs/handover.md` |
 | Operations runbook | `docs/runbook.md` |
-| Infrastructure as code | `infra/` (Terraform) |
+| Data catalog | `docs/data-catalog-appsflyer.md` |
 | CI/CD config | `cloudbuild/` |
-| Architecture spec | `tsd_tring_architecture.md` |
+| Infrastructure as code (reference only) | `infra/` (Terraform  -  not used in deploy; gcloud is authoritative) |
 
 After handover, the client's team can operate the pipeline independently using the runbook. No consultant access to prod GCP is required or expected.

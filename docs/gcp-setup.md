@@ -104,10 +104,9 @@ gcloud artifacts repositories create tring-service --repository-format=docker --
 ```bash
 bq --project_id=$PROJECT mk --location=asia-southeast2 appsflyer_raw
 bq --project_id=$PROJECT mk --location=asia-southeast2 appsflyer_staging
-bq --project_id=$PROJECT mk --location=asia-southeast2 appsflyer_mart
 ```
 
-Datasets are also auto-created by the ingestion code on first run (safe to skip).
+> Only two datasets. dbt writes both staging views (`stg_*`) and mart tables (`mart_*`) into `appsflyer_staging`  -  there is no separate `appsflyer_mart` dataset. The raw dataset (`appsflyer_raw`) is auto-created by the ingestion code on first run (safe to skip), but create it explicitly for clarity.
 
 ---
 
