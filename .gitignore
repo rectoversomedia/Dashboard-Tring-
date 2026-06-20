@@ -28,11 +28,15 @@ transform/.user.yml
 .terraform.lock.hcl
 
 # Secrets  -  never commit
+# Service-account keys, credentials, any JSON key material. No exceptions  -  the project
+# uses no tracked .json config, so a blanket ignore is safe and prevents key leaks.
 *.json
-!infra/**/*.json
 service-account*.json
 *-key.json
 *credentials*.json
+*.pem
+*.p12
+*.key
 
 # OS
 .DS_Store
