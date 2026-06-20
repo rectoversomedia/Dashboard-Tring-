@@ -17,12 +17,14 @@ Region: `asia-southeast2` (Jakarta). Environments: `dev` (consultant GCP project
 ## Prerequisites
 
 - Python 3.12
-- [uv](https://docs.astral.sh/uv/)
-- [dbt-core](https://docs.getdbt.com/) with `dbt-bigquery`
-- Terraform >= 1.5
+- [uv](https://docs.astral.sh/uv/) — for local ingestion development (`uv sync` in `ingestion/`)
+- [dbt-core](https://docs.getdbt.com/) with `dbt-bigquery` — for local transform runs (`cd transform && dbt run`)
+- Terraform >= 1.5 — optional, only if adopting IaC (see note below)
 - `gcloud` CLI authenticated to the target project
 
 > **Docker Desktop not required.** Container images are built and pushed via Cloud Build (GCP-native). No local Docker needed in dev or prod.
+
+> **Terraform not required.** `infra/` contains Terraform modules as IaC reference for the client, but all provisioning is done via `gcloud` commands (see `docs/gcp-setup.md`). Terraform is skipped because prod runs on client GitLab + VPN where Terraform state backend (GCS) adds unnecessary complexity. Client can adopt Terraform later without changing anything else.
 
 ## Quick Start
 
@@ -48,7 +50,7 @@ tring-data-pipeline/
   ingestion/        Python extractor (shared image, one job per source)
   transform/        dbt project (staging + mart models)
   orchestration/    Cloud Workflows definition
-  infra/            Terraform (modules + per-env wiring)
+  infra/            Terraform (optional — modules + per-env wiring, not used in current deploy)
   docs/             Runbook and reference
 ```
 

@@ -50,11 +50,14 @@ gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-dbt@
 ```
 
 ### sa-workflows
-Triggers Cloud Run Jobs from Cloud Workflows.
+Triggers Cloud Run Jobs from Cloud Workflows via v2 API.
 
 ```bash
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-workflows@${PROJECT}.iam.gserviceaccount.com" --role="roles/run.invoker"
+gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-workflows@${PROJECT}.iam.gserviceaccount.com" --role="roles/run.developer"
 ```
+
+> `roles/run.invoker` alone is not enough for Cloud Run Jobs via v2 API. `roles/run.developer` grants `run.jobs.run` which is required to execute jobs via `https://run.googleapis.com/v2/.../jobs:run`.
 
 ### sa-scheduler
 Triggers Cloud Workflows from Cloud Scheduler.
@@ -308,6 +311,7 @@ If the client wants to adopt Terraform later: copy `infra/envs/prod/terraform.tf
 | sa-dbt | bigquery.dataEditor | project |
 | sa-dbt | bigquery.jobUser | project |
 | sa-workflows | run.invoker | project |
+| sa-workflows | run.developer | project |
 | sa-scheduler | workflows.invoker | project |
 
 ## Setup User Roles
