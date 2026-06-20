@@ -31,22 +31,27 @@ models:
           - not_null
       - name: impressions
         tests:
-          - dbt_utils.expression_is_true:
-              expression: ">= 0"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
       - name: ctr
         tests:
-          - dbt_utils.expression_is_true:
-              expression: "is null or (>= 0 and <= 1)"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
               severity: warn
       - name: cpc
         tests:
-          - dbt_utils.expression_is_true:
-              expression: "is null or >= 0"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
               severity: warn
       - name: cpi
         tests:
-          - dbt_utils.expression_is_true:
-              expression: "is null or >= 0"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
               severity: warn
 
   - name: mart_appsflyer_user_quality
@@ -59,14 +64,14 @@ models:
         tests:
           - not_null
       - name: conversion_rate
-        tests:
-          - dbt_utils.expression_is_true:
-              expression: "is null or (>= 0 and <= 1)"
-              severity: warn
+        # No range test — can exceed 1.0 due to date grain mismatch (event_date vs install_date).
+        # A user who installs on day T and registers on day T+3 creates registrations with no
+        # matching installs on that date, and vice versa. This is expected behavior.
       - name: cost_per_registration
         tests:
-          - dbt_utils.expression_is_true:
-              expression: "is null or >= 0"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
               severity: warn
 
   - name: mart_appsflyer_retention
@@ -80,22 +85,29 @@ models:
           - not_null
       - name: cohort_size
         tests:
-          - dbt_utils.expression_is_true:
-              expression: "> 0"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
       - name: d1_retention
         tests:
-          - dbt_utils.expression_is_true:
-              expression: "is null or (>= 0 and <= 1)"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
               severity: warn
       - name: d7_retention
         tests:
-          - dbt_utils.expression_is_true:
-              expression: "is null or (>= 0 and <= 1)"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
               severity: warn
       - name: d30_retention
         tests:
-          - dbt_utils.expression_is_true:
-              expression: "is null or (>= 0 and <= 1)"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
               severity: warn
 
   - name: mart_appsflyer_fraud
@@ -109,10 +121,13 @@ models:
           - not_null
       - name: blocked_installs
         tests:
-          - dbt_utils.expression_is_true:
-              expression: ">= 0"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
       - name: fraud_rate
         tests:
-          - dbt_utils.expression_is_true:
-              expression: "is null or (>= 0 and <= 1)"
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
               severity: warn

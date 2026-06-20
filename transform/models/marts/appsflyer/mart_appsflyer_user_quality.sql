@@ -55,6 +55,9 @@ select
     coalesce(c.cost, 0)                         as cost,
 
     -- conversion_rate = registrations / installs
+    -- NOTE: can exceed 1.0 due to date grain mismatch — events use event_date, installs use
+    -- install_date. A user installing on day T and registering on day T+3 causes the numerator
+    -- and denominator to land on different dates in the same campaign grain.
     safe_divide(
         coalesce(e.registrations, 0),
         nullif(coalesce(i.installs, 0), 0)
