@@ -19,6 +19,7 @@ TO ?= $(shell date -u +%Y-%m-%d)
 	build-ingestion build-dbt \
 	push-ingestion push-dbt \
 	tf-init tf-plan tf-apply \
+	create-appsflyer create-dbt \
 	deploy-appsflyer deploy-dbt deploy-workflow deploy-scheduler \
 	run-appsflyer-local deploy
 
@@ -68,6 +69,29 @@ tf-apply:
 	terraform -chdir=infra/envs/$(ENV) apply -var-file=terraform.tfvars -auto-approve
 
 # -- Cloud Run Job deploy ------------------------------------------------------
+# create-* = first-time job creation (run once per env)
+# deploy-* = update existing job after new image push
+
+create-appsflyer:
+	gcloud run jobs create extract-appsflyer \
+		--image $(IMAGE_INGESTION):latest \
+		--region $(REGION) \
+		--project $(PROJECT) \
+		--set-env-vars GCP_PROJECT=$(PROJECT),BQ_DATASET_RAW=appsflyer_raw,REGION=$(REGION) \
+		--set-secrets APPSFLYER_API_TOKEN=appsflyer-api-token:latest \
+		--service-account sa-extract-appsflyer@$(PROJECT).iam.gserviceaccount.com \
+		--command python \
+		--args "-m,tring_ingest,--source,appsflyer,--from,1970-01-01,--to,1970-01-01"
+
+create-dbt:
+	gcloud run jobs create dbt-transform \
+		--image $(IMAGE_DBT):latest \
+		--region $(REGION) \
+		--project $(PROJECT) \
+		--set-env-vars GCP_PROJECT=$(PROJECT),REGION=$(REGION) \
+		--service-account sa-dbt@$(PROJECT).iam.gserviceaccount.com \
+		--command dbt \
+		--args "build,--profiles-dir,.,--target,$(ENV)"
 
 deploy-appsflyer:
 	gcloud run jobs update extract-appsflyer \
