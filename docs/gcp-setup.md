@@ -140,48 +140,115 @@ gcloud artifacts docker images list asia-southeast2-docker.pkg.dev/${PROJECT}/tr
 
 ## 8. Deploy Cloud Run Jobs
 
+> **Note on date args:** `--from`/`--to` are not set at job creation. Cloud Workflows injects them at runtime via `containerOverrides`. For manual backfill, use `gcloud run jobs execute` with `--args` override (see runbook section 3).
+
 ```bash
 REGISTRY=asia-southeast2-docker.pkg.dev
 
 # extract-appsflyer
+# --command and --args set the entrypoint; dates are injected by Workflow at runtime
 gcloud run jobs create extract-appsflyer \
   --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
   --region=asia-southeast2 \
   --service-account=sa-extract-appsflyer@${PROJECT}.iam.gserviceaccount.com \
   --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET_RAW=appsflyer_raw,REGION=asia-southeast2" \
   --set-secrets="APPSFLYER_API_TOKEN=appsflyer-api-token:latest" \
+  --command=python \
+  --args="-m,tring_ingest,--source,appsflyer" \
+  --memory=2Gi \
+  --cpu=1 \
   --project=$PROJECT
 
 # dbt-transform
+# ENTRYPOINT is hardcoded in Dockerfile: ["dbt", "build", "--profiles-dir", "/app", "--target", "prod"]
+# Do NOT set --command or --args here — they override the Dockerfile ENTRYPOINT and break dbt
 gcloud run jobs create dbt-transform \
   --image=${REGISTRY}/${PROJECT}/tring-service/dbt:latest \
   --region=asia-southeast2 \
   --service-account=sa-dbt@${PROJECT}.iam.gserviceaccount.com \
   --set-env-vars="GCP_PROJECT=${PROJECT}" \
-  --args="build,--profiles-dir,.,--target,prod" \
   --project=$PROJECT
 ```
 
-To update an existing job (after new image push):
+> **extract-appsflyer date args:** dates (`--from`/`--to`) are passed via env vars `DATE_FROM`/`DATE_TO` at runtime — either by Cloud Workflows (`containerOverrides.env`) or by `--update-env-vars` on manual execute. The job itself has no default dates.
+
+**Test manual run extract (T-1):**
 ```bash
+YESTERDAY=$(date -u -v-1d +%Y-%m-%d)
+gcloud run jobs execute extract-appsflyer \
+  --region=asia-southeast2 \
+  --project=$PROJECT \
+  --update-env-vars="DATE_FROM=${YESTERDAY},DATE_TO=${YESTERDAY}"
+```
+
+**Test manual run dbt:**
+```bash
+gcloud run jobs execute dbt-transform \
+  --region=asia-southeast2 \
+  --project=$PROJECT
+```
+
+**Check extract logs:**
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="extract-appsflyer"' \
+  --project=$PROJECT \
+  --limit=50 \
+  --order=desc \
+  --format="table(timestamp,textPayload)"
+```
+
+**Check dbt logs:**
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="dbt-transform"' \
+  --project=$PROJECT \
+  --limit=50 \
+  --order=desc \
+  --format="table(timestamp,textPayload)"
+```
+
+**Rebuild images and update jobs after code change:**
+```bash
+gcloud builds submit . \
+  --config=cloudbuild/build-push.yaml \
+  --substitutions="_PROJECT=${PROJECT}" \
+  --project=$PROJECT
+
 gcloud run jobs update extract-appsflyer \
   --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
-  --region=asia-southeast2 --project=$PROJECT
+  --region=asia-southeast2 \
+  --project=$PROJECT
 
 gcloud run jobs update dbt-transform \
   --image=${REGISTRY}/${PROJECT}/tring-service/dbt:latest \
-  --region=asia-southeast2 --project=$PROJECT
+  --region=asia-southeast2 \
+  --project=$PROJECT
 ```
 
 ---
 
 ## 9. Deploy Cloud Workflows
 
+> **Troubleshooting:** If you get `FAILED_PRECONDITION: Workflows service agent does not exist`, run:
+> ```bash
+> gcloud services enable workflows.googleapis.com --project=$PROJECT
+> PROJECT_NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
+> gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-workflows.iam.gserviceaccount.com" --role="roles/workflows.serviceAgent"
+> ```
+
+> **Note on parallel branches:** `pipeline.yaml` currently runs AppsFlyer as a sequential step (not `parallel`) because Cloud Workflows requires minimum 2 branches for parallel execution. When MoEngage/Play Console sources are added, convert back to `parallel` with 2+ branches.
+
 ```bash
 gcloud workflows deploy pipeline \
   --location=asia-southeast2 \
   --source=orchestration/workflows/pipeline.yaml \
   --service-account=sa-workflows@${PROJECT}.iam.gserviceaccount.com \
+  --project=$PROJECT
+```
+
+Verify deploy succeeded (`state: ACTIVE`):
+```bash
+gcloud workflows describe pipeline \
+  --location=asia-southeast2 \
   --project=$PROJECT
 ```
 

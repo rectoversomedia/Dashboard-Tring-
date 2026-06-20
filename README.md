@@ -63,9 +63,34 @@ tring-data-pipeline/
 
 ## GCP Setup
 
-See [docs/gcp-setup.md](docs/gcp-setup.md) for full provisioning steps: APIs, service accounts, IAM roles, secrets, Artifact Registry, and BigQuery datasets.
+See [docs/gcp-setup.md](docs/gcp-setup.md) for full provisioning steps: APIs, service accounts, IAM roles, secrets, Artifact Registry, BigQuery datasets, and Cloud Run Job creation.
 
 For client production onboarding (GitLab + VPN + Cloud Build setup), see [docs/handover.md](docs/handover.md).
+
+## Running the Pipeline
+
+**Scheduled:** Cloud Scheduler triggers Cloud Workflows twice daily (08:00 and 20:00 WIB). No manual action needed.
+
+**Manual run (yesterday):**
+```bash
+gcloud workflows run pipeline --location=asia-southeast2 --project=YOUR_PROJECT
+```
+
+**Manual run (specific date range / backfill):**
+```bash
+gcloud workflows run pipeline \
+  --data='{"date_from":"2026-06-01","date_to":"2026-06-10"}' \
+  --location=asia-southeast2 \
+  --project=YOUR_PROJECT
+```
+
+**Date handling:** Workflow auto-computes yesterday when no dates are passed. Pass `date_from`/`date_to` in `--data` to override for backfill.
+
+See [docs/runbook.md](docs/runbook.md) for full ops procedures: manual triggers, backfill, log reading, token rotation, and alerts.
+
+## Data Catalog
+
+See [docs/data-catalog-appsflyer.md](docs/data-catalog-appsflyer.md) for full AppsFlyer endpoint reference: table schemas, column definitions, row volume estimates, and known issues.
 
 ## Adding a New Source
 

@@ -2,18 +2,35 @@
 
 ## 1. Triggering a manual pipeline run
 
+Runs with auto-computed yesterday as date range:
 ```bash
 gcloud workflows run pipeline \
   --location=asia-southeast2 \
   --project=$PROJECT
 ```
 
-Watch execution:
+Run for a specific date range (backfill via Workflow):
+```bash
+gcloud workflows run pipeline \
+  --data='{"date_from":"2026-06-01","date_to":"2026-06-10"}' \
+  --location=asia-southeast2 \
+  --project=$PROJECT
+```
+
+Watch execution status:
 ```bash
 gcloud workflows executions list pipeline \
   --location=asia-southeast2 \
   --project=$PROJECT \
   --limit=5
+```
+
+Check execution detail (replace EXECUTION_ID from list above):
+```bash
+gcloud workflows executions describe EXECUTION_ID \
+  --workflow=pipeline \
+  --location=asia-southeast2 \
+  --project=$PROJECT
 ```
 
 ## 2. Running a single extractor manually
@@ -22,35 +39,61 @@ gcloud workflows executions list pipeline \
 gcloud run jobs execute extract-appsflyer \
   --region=asia-southeast2 \
   --project=$PROJECT \
-  --update-env-vars="FROM_DATE=2026-06-13,TO_DATE=2026-06-14"
+  --args="python,-m,tring_ingest,--source,appsflyer,--from,2026-06-19,--to,2026-06-19"
 ```
 
-Check logs:
+Check logs after execution:
 ```bash
-gcloud logging read \
-  'resource.type="cloud_run_job" AND resource.labels.job_name="extract-appsflyer"' \
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="extract-appsflyer"' \
   --project=$PROJECT \
   --limit=50 \
+  --order=desc \
+  --format="table(timestamp,textPayload)"
+```
+
+For JSON structured logs (more detail):
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="extract-appsflyer"' \
+  --project=$PROJECT \
+  --limit=50 \
+  --order=desc \
   --format=json
 ```
 
 ## 3. Backfilling historical data
 
-Run the extractor job with a wider date window. Raw is append-only; staging deduplicates by latest `_ingested_at` per natural key, so re-runs are safe.
+Raw is append-only. Staging deduplicates by latest `_ingested_at` per natural key, so re-runs are safe.
 
+**Option A — Backfill via Workflow (recommended, runs extract + dbt in sequence):**
 ```bash
-# Example: backfill last 30 days
+gcloud workflows run pipeline \
+  --data='{"date_from":"2026-05-01","date_to":"2026-05-31"}' \
+  --location=asia-southeast2 \
+  --project=$PROJECT
+```
+
+**Option B — Backfill extract only (manual, bypass Workflow):**
+```bash
 gcloud run jobs execute extract-appsflyer \
   --region=asia-southeast2 \
   --project=$PROJECT \
-  --update-env-vars="FROM_DATE=2026-05-01,TO_DATE=2026-05-31"
+  --args="python,-m,tring_ingest,--source,appsflyer,--from,2026-05-01,--to,2026-05-31"
 ```
 
-After extract completes, re-run dbt to rebuild staging and mart:
+After Option B extract completes, run dbt manually:
 ```bash
 gcloud run jobs execute dbt-transform \
   --region=asia-southeast2 \
   --project=$PROJECT
+```
+
+Check dbt logs:
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="dbt-transform"' \
+  --project=$PROJECT \
+  --limit=100 \
+  --order=desc \
+  --format="table(timestamp,textPayload)"
 ```
 
 ## 4. Rotating the AppsFlyer API token
@@ -70,7 +113,19 @@ gcloud secrets versions disable VERSION_NUMBER \
   --project=$PROJECT
 ```
 
-## 5. Reading alerts
+## 5. Known issue: in_app_events Android rate limit
+
+AppsFlyer limits daily raw data downloads per app. When hit:
+
+- Error: `400 Bad Request` on `in_app_events_report/v5` for `com.pegadaiandigital`
+- iOS not affected
+- Limit resets daily — next scheduled run will retry automatically
+- To fix permanently: client contacts AppsFlyer CSM to increase limit (hello@appsflyer.com)
+- Reference: https://support.appsflyer.com/hc/en-us/articles/207034366
+
+This is an AppsFlyer plan limitation, not a pipeline bug.
+
+## 6. Reading alerts
 
 When an alert fires:
 
