@@ -263,9 +263,9 @@ Multiple job executions during OOM debugging consumed the 12-call daily quota fo
 |---|---|---|---|
 | Raw | `appsflyer_raw` | Append-only tables | ingestion Cloud Run Job |
 | Staging | `appsflyer_staging` | Views (no materialization) | dbt |
-| Mart | `appsflyer_staging` | Tables (full refresh each run) | dbt |
+| Mart | `appsflyer_mart` | Tables (full refresh each run) | dbt |
 
-> Staging dan mart sama-sama di dataset `appsflyer_staging`. Dibedakan dari nama tabel: `stg_*` vs `mart_*`.
+> Tiga dataset terpisah per layer. dbt resolve staging/mart dari base name + `+schema` per folder (base `appsflyer`, `+schema: staging` atau `mart` di `dbt_project.yml`). Staging = `stg_*`, mart = `mart_*`.
 
 ---
 
