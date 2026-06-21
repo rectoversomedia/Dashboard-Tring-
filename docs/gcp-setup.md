@@ -158,8 +158,8 @@ gcloud run jobs create extract-appsflyer \
   --set-secrets="APPSFLYER_API_TOKEN=appsflyer-api-token:latest" \
   --command=python \
   --args="-m,tring_ingest,--source,appsflyer" \
-  --memory=2Gi \
-  --cpu=1 \
+  --memory=4Gi \
+  --cpu=2 \
   --project=$PROJECT
 
 # dbt-transform

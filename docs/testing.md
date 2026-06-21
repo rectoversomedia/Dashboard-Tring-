@@ -18,7 +18,7 @@ cd ingestion
 uv sync --extra dev
 ```
 
-What it does: creates `.venv/` and installs all packages pinned in `uv.lock`. The `--extra dev` flag includes pytest, ruff, and responses (HTTP mock library).
+What it does: creates `.venv/` and installs all packages from `pyproject.toml` into a local `.venv/`. The `--extra dev` flag includes pytest, ruff, and responses (HTTP mock library). Note: the Docker image uses `pip install .` directly (no uv), but for local dev `uv sync` is the right tool.
 
 ---
 
@@ -160,11 +160,11 @@ What it does: runs all models (seed, staging, mart) and all tests against the de
 ### Verify BQ tables after a run
 
 ```bash
-bq query --project_id=${PROJECT} \
-  'SELECT COUNT(*) as rows, MAX(_ingested_at) as latest FROM appsflyer_raw.raw_installs'
+bq query --project_id=${PROJECT} --use_legacy_sql=false \
+  'SELECT COUNT(*) as row_count, MAX(_ingested_at) as latest FROM `appsflyer_raw.raw_installs`'
 ```
 
-What it does: spot-check that rows landed in raw with a recent ingestion timestamp.
+What it does: spot-check that rows landed in raw with a recent ingestion timestamp. Use `row_count` not `rows` - `rows` is a reserved word in BigQuery standard SQL.
 
 ---
 

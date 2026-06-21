@@ -97,7 +97,7 @@ def load_csv_to_raw(
 
     if not rows:
         logger.warning(
-            "Empty response, skipping load",
+            "empty response, skipping load",
             extra={"table": table_id, "app_id": app_id, "platform": platform},
         )
         return 0
@@ -115,8 +115,12 @@ def load_csv_to_raw(
         ),
     )
 
-    load_job = client.load_table_from_json(rows, table_ref, job_config=job_config)
-    load_job.result()
+    # load in chunks so the bq api call never holds the full rows list in memory at once.
+    # in_app_events can be 500k+ rows; one big load_table_from_json call peaks at ~2x the
+    # list size. 5k chunks keep each call small while reusing the same job_config.
+    CHUNK_SIZE = 5_000
+    for i in range(0, len(rows), CHUNK_SIZE):
+        client.load_table_from_json(rows[i : i + CHUNK_SIZE], table_ref, job_config=job_config).result()
 
     logger.info(
         f"loaded {len(rows)} rows to {table_id}",
