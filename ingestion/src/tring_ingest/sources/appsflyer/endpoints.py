@@ -1,5 +1,3 @@
-"""AppsFlyer endpoint definitions. All values validated against Postman collection."""
-
 from dataclasses import dataclass
 
 from tring_ingest.common.config import (
@@ -29,7 +27,6 @@ def build_params(date_from: str, date_to: str, extra: dict | None = None) -> dic
     return params
 
 
-# All 4 endpoints. Paths validated against Postman collection.
 ENDPOINTS: list[Endpoint] = [
     Endpoint(
         name="installs",

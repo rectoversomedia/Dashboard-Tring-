@@ -1,5 +1,4 @@
-"""Structured JSON logging, compatible with Cloud Logging."""
-
+# json logs so cloud logging parses severity + fields automatically
 import json
 import logging
 import sys
@@ -12,7 +11,7 @@ class _StructuredFormatter(logging.Formatter):
             "message": record.getMessage(),
             "logger": record.name,
         }
-        # Attach any extra fields passed via extra={}
+        # anything passed via extra={} ends up as a top-level field
         for key, value in record.__dict__.items():
             if key not in (
                 "args",

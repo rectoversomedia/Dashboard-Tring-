@@ -1,5 +1,6 @@
-"""Load CSV rows into BigQuery raw as all STRING plus ingestion metadata."""
-
+# lands appsflyer csv into bq raw: every source column as STRING, plus our metadata.
+# string-everything means no value is ever lost or rejected at the boundary; typing
+# happens later in dbt staging.
 import contextlib
 import csv
 import io
@@ -27,7 +28,6 @@ METADATA_COLUMNS = [
 
 
 def _build_schema(source_columns: list[str]) -> list[bigquery.SchemaField]:
-    """All source columns as STRING plus metadata columns."""
     fields = [bigquery.SchemaField(col, "STRING") for col in source_columns]
     fields += [
         bigquery.SchemaField("_ingested_at", "TIMESTAMP"),
@@ -54,23 +54,19 @@ def load_csv_to_raw(
     expected_columns: list[str] | None = None,
     project_id: str = GCP_PROJECT,
 ) -> int:
-    """
-    Load verbatim CSV content into a BigQuery raw table.
-    All source columns land as STRING. Metadata columns are appended.
-    Strategy: append only. Staging deduplicates by latest _ingested_at per natural key.
-    Returns number of rows loaded.
-    """
+    # append-only. staging dedupes by latest _ingested_at per natural key, so re-runs
+    # and backfills are safe. returns the row count loaded.
     client = bigquery.Client(project=project_id)
     run_id = str(uuid.uuid4())
     ingested_at = datetime.now(UTC).isoformat()
 
-    # Auto-create dataset if it doesn't exist (safe for multi-env migration)
+    # first run in a fresh project won't have the dataset yet
     dataset_ref = bigquery.Dataset(f"{project_id}.{dataset_id}")
     dataset_ref.location = REGION
     with contextlib.suppress(Conflict):
         client.create_dataset(dataset_ref, exists_ok=True)
 
-    # Strip UTF-8 BOM if present (AppsFlyer CSV responses include ﻿ at start)
+    # appsflyer prepends a UTF-8 BOM to its csv; left in, it corrupts the first column name
     csv_content = csv_content.lstrip("﻿")
 
     reader = csv.DictReader(io.StringIO(csv_content))
@@ -113,7 +109,6 @@ def load_csv_to_raw(
         schema=schema,
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
         source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
-        # Partition by _ingested_at date, cluster by _platform
         time_partitioning=bigquery.TimePartitioning(
             type_=bigquery.TimePartitioningType.DAY,
             field="_ingested_at",
@@ -124,12 +119,7 @@ def load_csv_to_raw(
     load_job.result()
 
     logger.info(
-        "Loaded rows to BQ",
-        extra={
-            "table": table_ref,
-            "rows": len(rows),
-            "run_id": run_id,
-            "schema_flag": schema_flag or "ok",
-        },
+        f"loaded {len(rows)} rows to {table_id}",
+        extra={"table": table_ref, "rows": len(rows), "schema_flag": schema_flag or "ok"},
     )
     return len(rows)

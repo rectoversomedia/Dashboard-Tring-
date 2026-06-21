@@ -170,7 +170,7 @@ class TestExtractRun:
         mock_response.text = "col1\nval1\n"
 
         with (
-            patch("tring_ingest.sources.appsflyer.extract.AppsFlierClient") as mock_client_cls,
+            patch("tring_ingest.sources.appsflyer.extract.AppsFlyerClient") as mock_client_cls,
             patch("tring_ingest.sources.appsflyer.extract.load_csv_to_raw") as mock_load,
         ):
             mock_client = MagicMock()
@@ -199,7 +199,7 @@ class TestExtractRun:
             return mock_response
 
         with (
-            patch("tring_ingest.sources.appsflyer.extract.AppsFlierClient") as mock_client_cls,
+            patch("tring_ingest.sources.appsflyer.extract.AppsFlyerClient") as mock_client_cls,
             patch("tring_ingest.sources.appsflyer.extract.load_csv_to_raw") as mock_load,
         ):
             mock_client = MagicMock()
