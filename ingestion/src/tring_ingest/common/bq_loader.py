@@ -127,3 +127,65 @@ def load_csv_to_raw(
         extra={"table": table_ref, "rows": len(rows), "schema_flag": schema_flag or "ok"},
     )
     return len(rows)
+
+
+def load_json_rows_to_raw(
+    rows: list[dict],
+    dataset_id: str,
+    table_id: str,
+    source: str,
+    date_from: str,
+    date_to: str,
+    project_id: str = GCP_PROJECT,
+) -> int:
+    # JSON-based loader for sources that return JSON (not CSV). Same append-only contract
+    # as load_csv_to_raw: all source fields as STRING, plus the standard metadata columns.
+    if not rows:
+        logger.warning("empty rows, skipping load", extra={"table": table_id})
+        return 0
+
+    client = bigquery.Client(project=project_id)
+    run_id = str(uuid.uuid4())
+    ingested_at = datetime.now(UTC).isoformat()
+
+    dataset_ref = bigquery.Dataset(f"{project_id}.{dataset_id}")
+    dataset_ref.location = REGION
+    with contextlib.suppress(Conflict):
+        client.create_dataset(dataset_ref, exists_ok=True)
+
+    source_columns = sorted({k for row in rows for k in row.keys()})
+    enriched = []
+    for row in rows:
+        r = {col: str(row.get(col, "")) for col in source_columns}
+        r["_ingested_at"] = ingested_at
+        r["_source"] = source
+        r["_app_id"] = ""
+        r["_platform"] = ""
+        r["_run_id"] = run_id
+        r["_extract_from"] = date_from
+        r["_extract_to"] = date_to
+        r["_schema_flag"] = ""
+        enriched.append(r)
+
+    table_ref = f"{project_id}.{dataset_id}.{table_id}"
+    schema = _build_schema(source_columns)
+
+    job_config = bigquery.LoadJobConfig(
+        schema=schema,
+        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+        time_partitioning=bigquery.TimePartitioning(
+            type_=bigquery.TimePartitioningType.DAY,
+            field="_ingested_at",
+        ),
+    )
+
+    CHUNK_SIZE = 5_000
+    for i in range(0, len(enriched), CHUNK_SIZE):
+        client.load_table_from_json(enriched[i : i + CHUNK_SIZE], table_ref, job_config=job_config).result()
+
+    logger.info(
+        f"loaded {len(enriched)} rows to {table_id}",
+        extra={"table": table_ref, "rows": len(enriched)},
+    )
+    return len(enriched)

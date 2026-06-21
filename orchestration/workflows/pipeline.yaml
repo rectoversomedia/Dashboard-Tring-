@@ -5,7 +5,6 @@ main:
         assign:
           - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
           - region: "asia-southeast2"
-          - extract_job: "extract-appsflyer"
           - dbt_job: "dbt-transform"
 
     - resolve_dates:
@@ -35,62 +34,132 @@ main:
                       - name: DATE_TO
                         value: ${date_to}
 
-    - run_extract_appsflyer:
-        try:
-          call: http.post
-          args:
-            url: ${"https://run.googleapis.com/v2/projects/" + project + "/locations/" + region + "/jobs/" + extract_job + ":run"}
-            auth:
-              type: OAuth2
-            body: ${extract_body}
-          result: appsflyer_result
-        except:
-          as: e
-          steps:
-            - fail_appsflyer:
-                raise: "extract-appsflyer failed to start"
-
-    - get_extract_execution_name:
-        assign:
-          - extract_execution: ${appsflyer_result.body.metadata.name}
-
-    - wait_for_extract:
-        steps:
-          - poll_extract:
-              call: http.get
-              args:
-                url: ${"https://run.googleapis.com/v2/" + extract_execution}
-                auth:
-                  type: OAuth2
-              result: poll_result
-          - check_extract_state:
-              switch:
-                - condition: ${"reconciling" in poll_result.body and poll_result.body.reconciling == true}
-                  steps:
-                    - sleep_reconciling:
-                        call: sys.sleep
+    - run_extracts_parallel:
+        parallel:
+          branches:
+            - appsflyer_branch:
+                steps:
+                  - run_extract_appsflyer:
+                      try:
+                        call: http.post
                         args:
-                          seconds: 15
-                    - retry_reconciling:
-                        next: poll_extract
-                - condition: ${poll_result.body.conditions[0].state == "CONDITION_SUCCEEDED" and "succeededCount" in poll_result.body and poll_result.body.succeededCount == poll_result.body.taskCount}
-                  next: run_dbt
-                - condition: ${poll_result.body.conditions[0].state == "CONDITION_SUCCEEDED"}
-                  steps:
-                    - fail_extract_partial:
-                        raise: "extract-appsflyer completed but not all tasks succeeded"
-                - condition: ${poll_result.body.conditions[0].state == "CONDITION_FAILED"}
-                  steps:
-                    - fail_extract_execution:
-                        raise: "extract-appsflyer execution failed"
-                - condition: true
-                  steps:
-                    - sleep_before_retry:
-                        call: sys.sleep
+                          url: ${"https://run.googleapis.com/v2/projects/" + project + "/locations/" + region + "/jobs/extract-appsflyer:run"}
+                          auth:
+                            type: OAuth2
+                          body: ${extract_body}
+                        result: appsflyer_result
+                      except:
+                        as: e
+                        steps:
+                          - fail_appsflyer_start:
+                              raise: "extract-appsflyer failed to start"
+
+                  - get_appsflyer_execution:
+                      assign:
+                        - appsflyer_execution: ${appsflyer_result.body.metadata.name}
+
+                  - wait_for_appsflyer:
+                      steps:
+                        - poll_appsflyer:
+                            call: http.get
+                            args:
+                              url: ${"https://run.googleapis.com/v2/" + appsflyer_execution}
+                              auth:
+                                type: OAuth2
+                            result: appsflyer_poll
+                        - check_appsflyer_state:
+                            switch:
+                              - condition: ${"reconciling" in appsflyer_poll.body and appsflyer_poll.body.reconciling == true}
+                                steps:
+                                  - sleep_appsflyer_reconciling:
+                                      call: sys.sleep
+                                      args:
+                                        seconds: 15
+                                  - retry_appsflyer_reconciling:
+                                      next: poll_appsflyer
+                              - condition: ${appsflyer_poll.body.conditions[0].state == "CONDITION_SUCCEEDED" and "succeededCount" in appsflyer_poll.body and appsflyer_poll.body.succeededCount == appsflyer_poll.body.taskCount}
+                                next: appsflyer_done
+                              - condition: ${appsflyer_poll.body.conditions[0].state == "CONDITION_SUCCEEDED"}
+                                steps:
+                                  - fail_appsflyer_partial:
+                                      raise: "extract-appsflyer completed but not all tasks succeeded"
+                              - condition: ${appsflyer_poll.body.conditions[0].state == "CONDITION_FAILED"}
+                                steps:
+                                  - fail_appsflyer_execution:
+                                      raise: "extract-appsflyer execution failed"
+                              - condition: true
+                                steps:
+                                  - sleep_appsflyer:
+                                      call: sys.sleep
+                                      args:
+                                        seconds: 15
+                                  - retry_appsflyer:
+                                      next: poll_appsflyer
+                        - appsflyer_done:
+                            assign:
+                              - appsflyer_status: "succeeded"
+
+            - moengage_branch:
+                steps:
+                  - run_extract_moengage:
+                      try:
+                        call: http.post
                         args:
-                          seconds: 15
-                    - retry_poll:
-                        next: poll_extract
+                          url: ${"https://run.googleapis.com/v2/projects/" + project + "/locations/" + region + "/jobs/extract-moengage:run"}
+                          auth:
+                            type: OAuth2
+                          body: ${extract_body}
+                        result: moengage_result
+                      except:
+                        as: e
+                        steps:
+                          - fail_moengage_start:
+                              raise: "extract-moengage failed to start"
+
+                  - get_moengage_execution:
+                      assign:
+                        - moengage_execution: ${moengage_result.body.metadata.name}
+
+                  - wait_for_moengage:
+                      steps:
+                        - poll_moengage:
+                            call: http.get
+                            args:
+                              url: ${"https://run.googleapis.com/v2/" + moengage_execution}
+                              auth:
+                                type: OAuth2
+                            result: moengage_poll
+                        - check_moengage_state:
+                            switch:
+                              - condition: ${"reconciling" in moengage_poll.body and moengage_poll.body.reconciling == true}
+                                steps:
+                                  - sleep_moengage_reconciling:
+                                      call: sys.sleep
+                                      args:
+                                        seconds: 15
+                                  - retry_moengage_reconciling:
+                                      next: poll_moengage
+                              - condition: ${moengage_poll.body.conditions[0].state == "CONDITION_SUCCEEDED" and "succeededCount" in moengage_poll.body and moengage_poll.body.succeededCount == moengage_poll.body.taskCount}
+                                next: moengage_done
+                              - condition: ${moengage_poll.body.conditions[0].state == "CONDITION_SUCCEEDED"}
+                                steps:
+                                  - fail_moengage_partial:
+                                      raise: "extract-moengage completed but not all tasks succeeded"
+                              - condition: ${moengage_poll.body.conditions[0].state == "CONDITION_FAILED"}
+                                steps:
+                                  - fail_moengage_execution:
+                                      raise: "extract-moengage execution failed"
+                              - condition: true
+                                steps:
+                                  - sleep_moengage:
+                                      call: sys.sleep
+                                      args:
+                                        seconds: 15
+                                  - retry_moengage:
+                                      next: poll_moengage
+                        - moengage_done:
+                            assign:
+                              - moengage_status: "succeeded"
 
     - run_dbt:
         try:

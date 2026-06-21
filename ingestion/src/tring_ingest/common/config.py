@@ -22,3 +22,15 @@ APPSFLYER_TIMEZONE = "Asia/Jakarta"
 APPSFLYER_MASTER_AGG_GROUPINGS = "pid,c,install_time,geo"
 APPSFLYER_MASTER_AGG_KPIS = "impressions,clicks,installs,cost"
 APPSFLYER_MASTER_AGG_CURRENCY = "USD"
+
+# MoEngage
+BQ_DATASET_RAW_MOENGAGE = os.environ.get("BQ_DATASET_RAW_MOENGAGE", "moengage_raw")
+BQ_DATASET_STAGING_MOENGAGE = "moengage_staging"
+BQ_DATASET_MART_MOENGAGE = "moengage_mart"
+
+MOENGAGE_BASE_URL = "https://api-01.moengage.com"
+MOENGAGE_SECRET_NAME = os.environ.get("MOENGAGE_SECRET_NAME", "moengage-api-creds")
+
+# confirmed with live test; client to confirm final values before go-live
+MOENGAGE_ATTRIBUTION_TYPE = os.environ.get("MOENGAGE_ATTRIBUTION_TYPE", "VIEW_THROUGH")
+MOENGAGE_METRIC_TYPE = os.environ.get("MOENGAGE_METRIC_TYPE", "TOTAL")
