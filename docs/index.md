@@ -36,7 +36,7 @@ Terms used throughout the docs, plain-language definitions.
 | Term | What it is |
 |---|---|
 | **GCP** | Google Cloud Platform. The cloud provider everything runs on. |
-| **GCP project** | A container that holds all the cloud resources (jobs, datasets, secrets). Identified by a project ID like `hypefast-data-staging`. Everything is scoped to one project. |
+| **GCP project** | A container that holds all the cloud resources (jobs, datasets, secrets). Identified by a project ID (for example `my-company-data-prod`). Everything is scoped to one project. |
 | **BigQuery (BQ)** | Google's data warehouse. Where all the data lives, organized into datasets and tables. You query it with SQL. |
 | **Dataset** | A folder inside BigQuery that groups related tables. This project has three: `appsflyer_raw`, `appsflyer_staging`, `appsflyer_mart`. |
 | **Cloud Run Job** | A container that runs once, does its work, and stops (it is not a web server that stays up). The extract step and the dbt step are each a Cloud Run Job. |
@@ -90,7 +90,7 @@ Terms used throughout the docs, plain-language definitions.
 Almost every command in these docs uses `$PROJECT` as a placeholder for the GCP project ID. Before you run any of them, set it once in your terminal:
 
 ```bash
-export PROJECT=your-gcp-project-id   # e.g. hypefast-data-staging
+export PROJECT=your-gcp-project-id   # the GCP project ID for your environment
 ```
 
 After that, `$PROJECT` expands to your project ID automatically in every command for the rest of that terminal session. If you open a new terminal window, set it again.
