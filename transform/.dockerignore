@@ -1,0 +1,21 @@
+# dbt local state - regenerated inside the image by `dbt deps`
+target/
+dbt_packages/
+logs/
+.user.yml
+
+# Python / tool caches
+__pycache__/
+*.py[cod]
+.ruff_cache/
+
+# Local env and secrets
+.env
+*.json
+*.pem
+*.p12
+*.key
+
+# OS / IDE noise
+.DS_Store
+*.swp
