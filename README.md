@@ -6,8 +6,8 @@ Data pipeline for multi-source mobile app analytics. Sources: AppsFlyer, MoEngag
 
 ```
   -> Cloud Workflows
-      -> Cloud Run Job (extract-appsflyer  -  8 pulls: 4 endpoints x 2 platforms)
-      -> Cloud Run Job (extract-moengage   -  2 endpoints: campaign search + stats)  [infra pending]
+      -> [parallel] Cloud Run Job (extract-appsflyer  -  8 pulls: 4 endpoints x 2 platforms)
+      -> [parallel] Cloud Run Job (extract-moengage   -  2 endpoints: campaign search + stats)
       -> Cloud Run Job (dbt transform)
   -> BigQuery (raw -> staging/mart)
   -> Looker Studio (mart tables)
@@ -18,11 +18,9 @@ Data pipeline for multi-source mobile app analytics. Sources: AppsFlyer, MoEngag
 | Source | Extract code | Tests | dbt models | GCP infra | E2E |
 |---|---|---|---|---|---|
 | AppsFlyer | DONE | 12/12 | DONE | DONE | DONE |
-| MoEngage | DONE | 12/12 | pending | pending | pending |
+| MoEngage | DONE | 12/12 | DONE | DONE | DONE |
 | Play Console | scaffold only | - | pending | pending | pending |
 | App Store Connect | scaffold only | - | pending | pending | pending |
-
-> When MoEngage infra is provisioned, update `pipeline.yaml` to run extract-appsflyer and extract-moengage as parallel branches (minimum 2 branches required for Cloud Workflows parallel mode).
 
 Region: `asia-southeast2` (Jakarta). Environments: `dev` (consultant GCP project), `prod` (client GCP  -  deployed via GitLab + VPN).
 
@@ -110,9 +108,8 @@ See [docs/runbook.md](docs/runbook.md) for full ops procedures: manual triggers,
 
 ## Data Catalog
 
-See [docs/data-catalog-appsflyer.md](docs/data-catalog-appsflyer.md) for full AppsFlyer endpoint reference: table schemas, column definitions, row volume estimates, and known issues.
-
-MoEngage data catalog will be added when dbt models are built. For now, see the MoEngage TSD on Confluence (page 1549697042) for endpoint details, field mapping, and known gaps.
+- **AppsFlyer:** [docs/data-catalog-appsflyer.md](docs/data-catalog-appsflyer.md) - endpoint reference, table schemas, column definitions, row volumes, known issues.
+- **MoEngage:** [docs/data-catalog-moengage.md](docs/data-catalog-moengage.md) - endpoint reference, column definitions, API limits (limit=15, max 10 IDs/request, 30d window), known metric behaviors (CTR scale, ALL_PLATFORMS, impression as open proxy).
 
 ## Adding a New Source
 
