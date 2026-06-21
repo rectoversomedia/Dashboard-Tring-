@@ -5,129 +5,137 @@ models:
     description: "Install attribution grain: one row per appsflyer_id per install."
     columns:
       - name: appsflyer_id
-        tests:
+        data_tests:
           - not_null
       - name: install_date
-        tests:
+        data_tests:
           - not_null
       - name: media_source
-        tests:
+        data_tests:
           - not_null
       - name: platform
-        tests:
+        data_tests:
           - not_null
 
   - name: mart_appsflyer_campaign_performance
     description: "Campaign performance grain: date x media_source x campaign x platform x country."
     columns:
       - name: date
-        tests:
+        data_tests:
           - not_null
       - name: media_source
-        tests:
+        data_tests:
           - not_null
       - name: platform
-        tests:
+        data_tests:
           - not_null
       - name: impressions
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               inclusive: true
       - name: ctr
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 1
               inclusive: true
-              severity: warn
+              config:
+                severity: warn
       - name: cpc
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               inclusive: true
-              severity: warn
+              config:
+                severity: warn
       - name: cpi
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               inclusive: true
-              severity: warn
+              config:
+                severity: warn
 
   - name: mart_appsflyer_user_quality
     description: "User quality grain: date x media_source x campaign x platform x country."
     columns:
       - name: date
-        tests:
+        data_tests:
           - not_null
       - name: platform
-        tests:
+        data_tests:
           - not_null
       - name: conversion_rate
         # No range test  -  can exceed 1.0 due to date grain mismatch (event_date vs install_date).
         # A user who installs on day T and registers on day T+3 creates registrations with no
         # matching installs on that date, and vice versa. This is expected behavior.
       - name: cost_per_registration
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               inclusive: true
-              severity: warn
+              config:
+                severity: warn
 
   - name: mart_appsflyer_retention
     description: "Retention grain: cohort_date x media_source x campaign x platform x country."
     columns:
       - name: cohort_date
-        tests:
+        data_tests:
           - not_null
       - name: platform
-        tests:
+        data_tests:
           - not_null
       - name: cohort_size
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               inclusive: false
       - name: d1_retention
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 1
               inclusive: true
-              severity: warn
+              config:
+                severity: warn
       - name: d7_retention
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 1
               inclusive: true
-              severity: warn
+              config:
+                severity: warn
       - name: d30_retention
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 1
               inclusive: true
-              severity: warn
+              config:
+                severity: warn
 
   - name: mart_appsflyer_fraud
     description: "Fraud grain: date x media_source x campaign x platform x country."
     columns:
       - name: date
-        tests:
+        data_tests:
           - not_null
       - name: platform
-        tests:
+        data_tests:
           - not_null
       - name: blocked_installs
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               inclusive: true
       - name: fraud_rate
-        tests:
+        data_tests:
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 1
               inclusive: true
-              severity: warn
+              config:
+                severity: warn

@@ -3,25 +3,25 @@ version: 2
 models:
   - name: stg_appsflyer_installs
     description: "Typed, deduped installs. One row per appsflyer_id per install_date per platform."
-    tests:
+    data_tests:
       - dbt_utils.unique_combination_of_columns:
           name: stg_appsflyer_installs_unique_key
           combination_of_columns: ["appsflyer_id", "install_date", "_platform"]
     columns:
       - name: appsflyer_id
-        tests:
+        data_tests:
           - not_null
       - name: install_date
-        tests:
+        data_tests:
           - not_null
       - name: media_source
-        tests:
+        data_tests:
           - not_null
       - name: platform
-        tests:
+        data_tests:
           - not_null
       - name: _platform
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               values: ["android", "ios"]
@@ -30,21 +30,22 @@ models:
     description: "Typed in-app events with event category mapped from seed."
     columns:
       - name: appsflyer_id
-        tests:
+        data_tests:
           - not_null
       - name: event_name
-        tests:
+        data_tests:
           - not_null
       - name: event_date
-        tests:
+        data_tests:
           - not_null
       - name: event_category
-        tests:
+        data_tests:
           - accepted_values:
               values: ["open_app", "login", "purchase", "registrations"]
-              severity: warn
+              config:
+                severity: warn
       - name: _platform
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               values: ["android", "ios"]
@@ -53,17 +54,18 @@ models:
     description: "Typed, deduped blocked installs."
     columns:
       - name: appsflyer_id
-        tests:
+        data_tests:
           - not_null
       - name: install_date
-        tests:
+        data_tests:
           - not_null
       - name: blocked_reason
-        tests:
+        data_tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: _platform
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               values: ["android", "ios"]
@@ -72,33 +74,34 @@ models:
     description: "Typed campaign performance from master-agg-data."
     columns:
       - name: date
-        tests:
+        data_tests:
           - not_null
       - name: media_source
-        tests:
+        data_tests:
           - not_null
       - name: impressions
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.expression_is_true:
               expression: ">= 0"
       - name: clicks
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.expression_is_true:
               expression: ">= 0"
       - name: installs
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.expression_is_true:
               expression: ">= 0"
       - name: cost
-        tests:
+        data_tests:
           - dbt_utils.expression_is_true:
               expression: ">= 0"
-              severity: warn
+              config:
+                severity: warn
       - name: _platform
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               values: ["android", "ios"]
