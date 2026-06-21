@@ -17,6 +17,9 @@ models:
       +schema: staging
       appsflyer:
         +tags: ["appsflyer", "staging"]
+      moengage:
+        +tags: ["moengage", "staging"]
+        +schema: moengage_staging
     marts:
       +materialized: table
       +schema: mart
@@ -47,6 +50,19 @@ models:
             field: date
             data_type: date
           +cluster_by: ["media_source", "campaign", "platform"]
+      moengage:
+        +tags: ["moengage", "mart"]
+        +schema: moengage_mart
+        mart_moengage_push:
+          +partition_by:
+            field: stats_date_from
+            data_type: date
+          +cluster_by: ["platform", "channel"]
+        mart_moengage_campaign_analytics:
+          +partition_by:
+            field: stats_date_from
+            data_type: date
+          +cluster_by: ["platform", "channel"]
 
 seeds:
   tring_transform:

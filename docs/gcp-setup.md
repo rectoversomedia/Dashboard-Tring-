@@ -21,12 +21,13 @@ gcloud services enable run.googleapis.com secretmanager.googleapis.com workflows
 
 ```bash
 gcloud iam service-accounts create sa-extract-appsflyer --display-name="AppsFlyer extractor runtime" --project=$PROJECT
+gcloud iam service-accounts create sa-extract-moengage --display-name="MoEngage extractor runtime" --project=$PROJECT
 gcloud iam service-accounts create sa-dbt --display-name="dbt transform runtime" --project=$PROJECT
 gcloud iam service-accounts create sa-workflows --display-name="Cloud Workflows orchestrator" --project=$PROJECT
 gcloud iam service-accounts create sa-scheduler --display-name="Cloud Scheduler trigger" --project=$PROJECT
 ```
 
-> **Adding a new source (MoEngage, Play Console, App Store Connect):** create a dedicated SA per source  -  `sa-extract-moengage`, `sa-extract-playstore`, etc. Grant only the roles that source needs. Never reuse an existing extractor SA for a different source.
+> **Adding a new source (Play Console, App Store Connect):** create a dedicated SA per source  -  `sa-extract-playstore`, etc. Grant only the roles that source needs. Never reuse an existing extractor SA for a different source.
 
 ---
 
@@ -59,6 +60,15 @@ gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-work
 
 > `roles/run.invoker` alone is not enough for Cloud Run Jobs via v2 API. `roles/run.developer` grants `run.jobs.run` which is required to execute jobs via `https://run.googleapis.com/v2/.../jobs:run`.
 
+### sa-extract-moengage
+Runs the MoEngage extract Cloud Run Job.
+
+```bash
+gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com" --role="roles/bigquery.dataEditor"
+gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com" --role="roles/bigquery.jobUser"
+gcloud secrets add-iam-policy-binding moengage-api-creds --member="serviceAccount:sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor" --project=$PROJECT
+```
+
 ### sa-scheduler
 Triggers Cloud Workflows from Cloud Scheduler.
 
@@ -68,7 +78,9 @@ gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-sche
 
 ---
 
-## 4. Create Secret Manager Secret
+## 4. Create Secret Manager Secrets
+
+### AppsFlyer
 
 Create the container first (empty):
 ```bash
@@ -89,6 +101,23 @@ To rotate:
 echo -n "NEW_TOKEN" | gcloud secrets versions add appsflyer-api-token --data-file=- --project=$PROJECT
 ```
 
+### MoEngage
+
+The MoEngage secret stores both credentials as a single colon-delimited string (`WORKSPACE_ID:API_KEY`). Get the values from the MoEngage dashboard > Settings > APIs.
+
+```bash
+gcloud secrets create moengage-api-creds --replication-policy="automatic" --project=$PROJECT
+
+# Value format: WORKSPACE_ID:API_KEY  (colon-separated, no spaces)
+# Never commit the actual values - add them directly in the terminal
+echo -n "YOUR_WORKSPACE_ID:YOUR_API_KEY" | gcloud secrets versions add moengage-api-creds --data-file=- --project=$PROJECT
+```
+
+To rotate:
+```bash
+echo -n "NEW_WORKSPACE_ID:NEW_API_KEY" | gcloud secrets versions add moengage-api-creds --data-file=- --project=$PROJECT
+```
+
 ---
 
 ## 5. Create Artifact Registry Repository
@@ -101,13 +130,23 @@ gcloud artifacts repositories create tring-service --repository-format=docker --
 
 ## 6. Create BigQuery Datasets
 
+### AppsFlyer
+
 ```bash
 bq --project_id=$PROJECT mk --location=asia-southeast2 appsflyer_raw
 bq --project_id=$PROJECT mk --location=asia-southeast2 appsflyer_staging
 bq --project_id=$PROJECT mk --location=asia-southeast2 appsflyer_mart
 ```
 
-> Three datasets, one per layer: `appsflyer_raw` (ingestion landing), `appsflyer_staging` (dbt staging views `stg_*`), `appsflyer_mart` (dbt mart tables `mart_*`). dbt resolves the staging/mart datasets from a base name plus a per-folder `+schema` (base `appsflyer`, `+schema: staging` or `mart` in `dbt_project.yml`). The raw dataset is also auto-created by the ingestion code on first run (safe to skip), but create all three explicitly for clarity.
+> Three datasets per source, one per layer: raw (ingestion landing, append-only), staging (dbt `stg_*` views, typed + deduplicated), mart (dbt `mart_*` tables, full-refresh, dashboard-ready). dbt resolves dataset names from base + per-folder `+schema` in `dbt_project.yml`.
+
+### MoEngage
+
+```bash
+bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_raw
+bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_staging
+bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_mart
+```
 
 ---
 
@@ -160,6 +199,20 @@ gcloud run jobs create extract-appsflyer \
   --args="-m,tring_ingest,--source,appsflyer" \
   --memory=4Gi \
   --cpu=2 \
+  --project=$PROJECT
+
+# extract-moengage (same ingestion image, different --source arg)
+gcloud run jobs create extract-moengage \
+  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --region=asia-southeast2 \
+  --service-account=sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com \
+  --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET_RAW_MOENGAGE=moengage_raw,REGION=asia-southeast2" \
+  --set-secrets="MOENGAGE_API_CREDS=moengage-api-creds:latest" \
+  --command=python \
+  --args="-m,tring_ingest,--source,moengage" \
+  --memory=2Gi \
+  --cpu=1 \
+  --max-retries=0 \
   --project=$PROJECT
 
 # dbt-transform
@@ -221,6 +274,11 @@ gcloud run jobs update extract-appsflyer \
   --region=asia-southeast2 \
   --project=$PROJECT
 
+gcloud run jobs update extract-moengage \
+  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --region=asia-southeast2 \
+  --project=$PROJECT
+
 gcloud run jobs update dbt-transform \
   --image=${REGISTRY}/${PROJECT}/tring-service/dbt:latest \
   --region=asia-southeast2 \
@@ -237,8 +295,6 @@ gcloud run jobs update dbt-transform \
 > PROJECT_NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
 > gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-workflows.iam.gserviceaccount.com" --role="roles/workflows.serviceAgent"
 > ```
-
-> **Note on parallel branches:** `pipeline.yaml` currently runs AppsFlyer as a sequential step (not `parallel`) because Cloud Workflows requires minimum 2 branches for parallel execution. When MoEngage/Play Console sources are added, convert back to `parallel` with 2+ branches.
 
 ```bash
 gcloud workflows deploy pipeline \
@@ -308,6 +364,9 @@ If the client wants to adopt Terraform later: copy `infra/envs/prod/terraform.tf
 | sa-extract-appsflyer | bigquery.dataEditor | project |
 | sa-extract-appsflyer | bigquery.jobUser | project |
 | sa-extract-appsflyer | secretmanager.secretAccessor | secret: appsflyer-api-token only |
+| sa-extract-moengage | bigquery.dataEditor | project |
+| sa-extract-moengage | bigquery.jobUser | project |
+| sa-extract-moengage | secretmanager.secretAccessor | secret: moengage-api-creds only |
 | sa-dbt | bigquery.dataEditor | project |
 | sa-dbt | bigquery.jobUser | project |
 | sa-workflows | run.invoker | project |

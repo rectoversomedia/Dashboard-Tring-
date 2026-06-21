@@ -1,0 +1,64 @@
+version: 2
+
+models:
+  - name: stg_moengage_campaigns
+    description: "Typed, deduped campaigns. One row per campaign_id (latest ingest)."
+    columns:
+      - name: campaign_id
+        data_tests:
+          - not_null
+          - unique
+      - name: channel
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["PUSH", "EMAIL", "SMS", "IN_APP", "CARDS", "CONNECTOR", "ON_SITE"]
+              config:
+                severity: warn
+      - name: status
+        data_tests:
+          - not_null
+
+  - name: stg_moengage_campaign_stats
+    description: "Typed, deduped campaign stats. One row per campaign_id x platform x locale x variation x extract_from."
+    columns:
+      - name: campaign_id
+        data_tests:
+          - not_null
+      - name: platform
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["ANDROID", "IOS", "UNKNOWN", "ALL_PLATFORMS"]
+              config:
+                severity: warn
+      - name: sent
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: impression
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: click
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: ctr
+        # MoEngage ctr field is 0-100 percentage scale (e.g. 25.0 = 25%), not 0-1 ratio.
+        # Can exceed 100 when sent=0 but click>0 (MoEngage data edge case - not a pipeline bug).
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn

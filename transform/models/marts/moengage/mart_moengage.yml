@@ -1,0 +1,88 @@
+version: 2
+
+models:
+  - name: mart_moengage_push
+    description: "Push notification metrics (Group A). Grain: campaign x platform x date window. impression = open proxy."
+    columns:
+      - name: campaign_id
+        data_tests:
+          - not_null
+      - name: platform
+        data_tests:
+          - not_null
+      - name: stats_date_from
+        data_tests:
+          - not_null
+      - name: sent
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: open_proxy
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: click
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: click_rate
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+              config:
+                severity: warn
+      - name: open_proxy_rate
+        # open_proxy_rate = impression / sent; can exceed 1.0 (MoEngage shows notification multiple times).
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+
+  - name: mart_moengage_campaign_analytics
+    description: "Campaign analytics (Group E). Grain: campaign x platform x date window. Includes campaign metadata and delivery funnel."
+    columns:
+      - name: campaign_id
+        data_tests:
+          - not_null
+      - name: platform
+        data_tests:
+          - not_null
+      - name: stats_date_from
+        data_tests:
+          - not_null
+      - name: sent
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: click_rate
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+              config:
+                severity: warn
+      - name: delivery_rate
+        # delivery_rate = sent / attempted via safe_divide; can exceed 1.0 in MoEngage data.
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn

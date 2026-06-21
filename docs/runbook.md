@@ -6,7 +6,7 @@
 
 ## 1. Triggering a manual pipeline run
 
-> **Workflow behavior:** Workflow triggers extract-appsflyer, polls every 15s until SUCCEEDED, then triggers dbt-transform, polls until SUCCEEDED, then returns. Total duration ~7 minutes (verified). If extract fails (e.g. rate limit, API error), Workflow fails immediately  -  dbt does NOT run.
+> **Workflow behavior:** Workflow triggers extract-appsflyer and extract-moengage **in parallel**, polls each every 15s until SUCCEEDED (both must succeed), then triggers dbt-transform, polls until SUCCEEDED, then returns. Total duration ~6-7 minutes (verified 2026-06-21). If either extract fails (e.g. rate limit, API error), Workflow fails immediately  -  dbt does NOT run.
 
 **Run pipeline (T-1 auto-computed):**
 ```bash
@@ -43,7 +43,7 @@ error:
   context: "extract-appsflyer completed but not all tasks succeeded"
 ```
 
-**Step 2  -  Check extract logs (look for "8 extracts succeeded" or errors):**
+**Step 2a  -  Check AppsFlyer extract logs:**
 ```bash
 gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="extract-appsflyer"' \
   --project=$PROJECT \
@@ -56,7 +56,20 @@ Key lines to look for:
 - `Extract complete: 8/8 succeeded` → success
 - `RuntimeError: Extract failed for N pull(s)` → failure, check which endpoint/platform
 
-**Step 3  -  Check dbt logs (look for PASS=63 ERROR=0):**
+**Step 2b  -  Check MoEngage extract logs:**
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="extract-moengage"' \
+  --project=$PROJECT \
+  --limit=50 \
+  --order=desc \
+  --format="table(timestamp,textPayload)"
+```
+
+Key lines to look for:
+- `Extract complete` (exit 0) → success
+- Any `ERROR` or non-zero exit → failure; check API connectivity or secret rotation
+
+**Step 3  -  Check dbt logs (look for PASS=93 ERROR=0):**
 ```bash
 gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="dbt-transform"' \
   --project=$PROJECT \
@@ -66,7 +79,7 @@ gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name=
 ```
 
 Key lines to look for:
-- `Done. PASS=63 WARN=0 ERROR=0` → success
+- `Done. PASS=93 WARN=0 ERROR=0` → success
 - `Done. PASS=XX ERROR=N` → test failures, check which model
 
 **Step 4  -  Check execution list (optional):**
@@ -84,9 +97,17 @@ gcloud run jobs executions list \
 
 ## 3. Running a single job manually
 
-**Extract only (bypass Workflow):**
+**Extract AppsFlyer only (bypass Workflow):**
 ```bash
 gcloud run jobs execute extract-appsflyer \
+  --region=asia-southeast2 \
+  --project=$PROJECT \
+  --update-env-vars="DATE_FROM=2026-06-19,DATE_TO=2026-06-19"
+```
+
+**Extract MoEngage only (bypass Workflow):**
+```bash
+gcloud run jobs execute extract-moengage \
   --region=asia-southeast2 \
   --project=$PROJECT \
   --update-env-vars="DATE_FROM=2026-06-19,DATE_TO=2026-06-19"
@@ -146,7 +167,25 @@ gcloud secrets versions disable VERSION_NUMBER \
 
 ---
 
-## 6. Known issue: in_app_events rate limit
+## 6. Rotating the MoEngage API credentials
+
+```bash
+echo -n "NEW_WORKSPACE_ID:NEW_API_KEY" | gcloud secrets versions add moengage-api-creds \
+  --data-file=- \
+  --project=$PROJECT
+
+gcloud secrets versions list moengage-api-creds --project=$PROJECT
+
+gcloud secrets versions disable VERSION_NUMBER \
+  --secret=moengage-api-creds \
+  --project=$PROJECT
+```
+
+> Secret format: `WORKSPACE_ID:API_KEY` colon-separated. Get values from MoEngage dashboard > Settings > APIs.
+
+---
+
+## 7. Known issue: AppsFlyer in_app_events rate limit
 
 AppsFlyer limits: `in_app_events` 12 calls/day/app, `installs` 24/day/app. When hit:
 
@@ -160,7 +199,7 @@ AppsFlyer limits: `in_app_events` 12 calls/day/app, `installs` 24/day/app. When 
 
 ---
 
-## 7. Checking for failures (no alerting provisioned)
+## 8. Checking for failures (no alerting provisioned)
 
 There is no automated alert. Failures surface as a `FAILED` Workflow execution. Check periodically, or after a scheduled run:
 
@@ -171,25 +210,76 @@ There is no automated alert. Failures surface as a `FAILED` Workflow execution. 
 > **To add email/Slack alerting (optional):** create a Cloud Monitoring alert policy on metric `workflows.googleapis.com/finished_execution_count` filtered to `status="FAILED"`, attached to a notification channel (email/Slack/PagerDuty). This was left out of the initial handover scope.
 
 Common causes:
-- **HTTP 401**: AppsFlyer token expired → rotate token (Section 5)
+- **HTTP 401 (AppsFlyer)**: Token expired → rotate token (Section 5)
+- **HTTP 401 (MoEngage)**: Credentials invalid → rotate secret (Section 6)
 - **HTTP 400 rate limit**: Daily quota exhausted → wait for UTC 00:00 reset
 - **Empty response**: No data for that date window  -  normal for new apps or holidays
 - **dbt ERROR=N**: Test failures → check which model, run `dbt build --select failing_model` locally
 
 ---
 
-## 8. Adding a new source (MoEngage, Play Console, App Store Connect)
+## 9. Adding a new source (Play Console, App Store Connect)
 
-1. Add package under `ingestion/src/tring_ingest/sources/<source_name>/`
-2. Implement `client.py`, `endpoints.py`, `extract.py` following AppsFlyer pattern
-3. Add `--source <source_name>` to `cli.py`
-4. Create new Cloud Run Job + SA + IAM (see `docs/gcp-setup.md`)
-5. Add new extract job to `pipeline.yaml` as parallel branch (min 2 branches required)
-6. Add dbt models under `transform/models/staging/<source>/` and `transform/models/marts/<source>/`
+**MoEngage** - fully implemented and E2E verified (2026-06-21: 599 campaigns, 4712 stats rows, exit(0), full pipeline SUCCEEDED). GCP infra provisioned (SA, secret, BQ datasets, Cloud Run Job `extract-moengage`). dbt models built (`stg_moengage_campaigns`, `stg_moengage_campaign_stats`, `mart_moengage_push`, `mart_moengage_campaign_analytics`). pipeline.yaml runs both extracts in parallel (PASS=93 WARN=0 ERROR=0).
+
+General steps for any new source:
+
+1. Add package under `ingestion/src/tring_ingest/sources/<source_name>/` with `client.py`, `endpoints.py`, `extract.py` following the AppsFlyer or MoEngage pattern
+2. Add `--source <source_name>` handler to `cli.py`
+3. Add config env vars to `common/config.py`
+4. Create the Secret Manager secret, SA, IAM, and BQ datasets (see `docs/gcp-setup.md` section on adding sources)
+5. Create new Cloud Run Job pointing to the ingestion image with `--source <source_name>`
+6. Add the new extract job to `pipeline.yaml` as a parallel branch (min 2 branches required for parallel mode)
+7. Add dbt models under `transform/models/staging/<source>/` and `transform/models/marts/<source>/`
+
+**Infra commands for MoEngage (run once per GCP project):**
+
+```bash
+# SA
+gcloud iam service-accounts create sa-extract-moengage \
+  --display-name="MoEngage extractor runtime" --project=$PROJECT
+
+# IAM
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member="serviceAccount:sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com" \
+  --role="roles/bigquery.dataEditor"
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member="serviceAccount:sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com" \
+  --role="roles/bigquery.jobUser"
+
+# Secret (add value out of band - never commit the value)
+gcloud secrets create moengage-api-creds --replication-policy="automatic" --project=$PROJECT
+# Value format: WORKSPACE_ID:API_KEY  (colon-separated, no spaces)
+echo -n "YOUR_WORKSPACE_ID:YOUR_API_KEY" | gcloud secrets versions add moengage-api-creds \
+  --data-file=- --project=$PROJECT
+
+gcloud secrets add-iam-policy-binding moengage-api-creds \
+  --member="serviceAccount:sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor" --project=$PROJECT
+
+# BQ datasets
+bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_raw
+bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_staging
+bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_mart
+
+# Cloud Run Job (same ingestion image, different --source)
+REGISTRY=asia-southeast2-docker.pkg.dev
+gcloud run jobs create extract-moengage \
+  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --region=asia-southeast2 \
+  --service-account=sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com \
+  --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET_RAW_MOENGAGE=moengage_raw,REGION=asia-southeast2" \
+  --set-secrets="MOENGAGE_API_CREDS=moengage-api-creds:latest" \
+  --command=python \
+  --args="-m,tring_ingest,--source,moengage" \
+  --memory=2Gi --cpu=1 \
+  --max-retries=0 \
+  --project=$PROJECT
+```
 
 ---
 
-## 9. Deploying a change
+## 10. Deploying a change
 
 ```bash
 # Build + push new image
@@ -198,8 +288,13 @@ gcloud builds submit . \
   --substitutions="_PROJECT=$PROJECT" \
   --project=$PROJECT
 
-# Update Cloud Run Job to new image
+# Update Cloud Run Jobs to new image
 gcloud run jobs update extract-appsflyer \
+  --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/ingestion:latest \
+  --region=asia-southeast2 \
+  --project=$PROJECT
+
+gcloud run jobs update extract-moengage \
   --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/ingestion:latest \
   --region=asia-southeast2 \
   --project=$PROJECT
@@ -212,7 +307,7 @@ gcloud run jobs update dbt-transform \
 
 ---
 
-## 10. Checking dbt model freshness
+## 11. Checking dbt model freshness
 
 ```bash
 cd transform

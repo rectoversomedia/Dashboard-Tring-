@@ -187,7 +187,7 @@ gcloud builds submit . \
 This command uploads the code to Cloud Build and runs the deploy script. It will:
 1. Build the ingestion container image and push it to Artifact Registry
 2. Build the dbt container image and push it to Artifact Registry
-3. Update the existing Cloud Run Jobs (`extract-appsflyer` and `dbt-transform`) to use the new images
+3. Update the existing Cloud Run Jobs (`extract-appsflyer`, `extract-moengage`, and `dbt-transform`) to use the new images
 
 **Watch the build progress:**
 
@@ -222,7 +222,7 @@ gcloud workflows executions list pipeline \
   --limit=5
 ```
 
-Expected: `state: SUCCEEDED`. One extract-appsflyer job runs (it pulls 8 reports internally  -  4 endpoints x 2 platforms), then dbt-transform runs (`PASS=63 WARN=0 ERROR=0`). See `docs/runbook.md` section 2 for how to verify each stage.
+Expected: `state: SUCCEEDED`. Two extract jobs run in parallel: extract-appsflyer (8 reports: 4 endpoints x 2 platforms) and extract-moengage (campaign + stats data). After both complete, dbt-transform runs (`PASS=93 WARN=0 ERROR=0`). See `docs/runbook.md` section 2 for how to verify each stage.
 
 ---
 
@@ -231,13 +231,13 @@ Expected: `state: SUCCEEDED`. One extract-appsflyer job runs (it pulls 8 reports
 | Event | What happens automatically |
 |---|---|
 | Push to `main` on GitLab | Cloud Build trigger fires → build images → roll new images onto Cloud Run Jobs |
-| Cloud Scheduler (twice daily, 08:00 and 20:00 WIB) | Triggers Cloud Workflows → runs extract-appsflyer (8 pulls) → runs dbt |
+| Cloud Scheduler (twice daily, 08:00 and 20:00 WIB) | Triggers Cloud Workflows → runs extract-appsflyer (8 pulls) and extract-moengage in parallel → runs dbt |
 | Extractor failure | Workflow polling detects non-success, marks the execution `FAILED` (dbt does NOT run) |
 | dbt test failure | Job exits non-zero → Workflow marks the execution `FAILED` |
 
 > **Schedule assumption:** The 08:00 and 20:00 WIB schedule is a default based on the TSD (twice daily to catch late-arriving data). The client has not confirmed a final schedule. To change: `gcloud scheduler jobs update http pipeline-trigger-morning --schedule="0 H * * *" --location=asia-southeast2 --project=PROJECT` (and same for `pipeline-trigger-afternoon`). See runbook.md for more.
 
-> **Alerting is not provisioned.** Failures surface as a `FAILED` Workflow execution, visible via `gcloud workflows executions list` or the Console. Email/Slack alerting on failure is out of scope for the initial handover  -  if the client wants it, add a Cloud Monitoring alert policy on the `workflows.googleapis.com/finished_execution_count` metric (filtered to `status=FAILED`) with a notification channel. See runbook.md section 7.
+> **Alerting is not provisioned.** Failures surface as a `FAILED` Workflow execution, visible via `gcloud workflows executions list` or the Console. Email/Slack alerting on failure is out of scope for the initial handover  -  if the client wants it, add a Cloud Monitoring alert policy on the `workflows.googleapis.com/finished_execution_count` metric (filtered to `status=FAILED`) with a notification channel. See runbook.md section 8.
 
 ---
 
@@ -260,7 +260,8 @@ See `docs/runbook.md` for:
 | GCP provisioning guide | `docs/gcp-setup.md` (authoritative deploy method  -  gcloud) |
 | This handover guide | `docs/handover.md` |
 | Operations runbook | `docs/runbook.md` |
-| Data catalog | `docs/data-catalog-appsflyer.md` |
+| Data catalog (AppsFlyer) | `docs/data-catalog-appsflyer.md` |
+| Data catalog (MoEngage) | `docs/data-catalog-moengage.md` |
 | CI/CD config | `cloudbuild/` |
 | Infrastructure as code (reference only) | `infra/` (Terraform  -  not used in deploy; gcloud is authoritative) |
 
