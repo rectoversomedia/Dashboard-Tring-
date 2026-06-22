@@ -22,12 +22,14 @@ class MoEngageClient:
         self._base_url = MOENGAGE_BASE_URL
         token = base64.b64encode(f"{workspace_id}:{api_key}".encode()).decode()
         self._session = requests.Session()
-        self._session.headers.update({
-            "Authorization": f"Basic {token}",
-            "MOE-APPKEY": workspace_id,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        })
+        self._session.headers.update(
+            {
+                "Authorization": f"Basic {token}",
+                "MOE-APPKEY": workspace_id,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+        )
 
     def post(self, path: str, payload: dict) -> requests.Response:
         from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -42,7 +44,9 @@ class MoEngageClient:
             url = f"{self._base_url}{path}"
             response = self._session.post(url, json=payload, timeout=120)
             if response.status_code in _RETRY_STATUS_CODES:
-                logger.warning("retrying http error", extra={"status": response.status_code, "url": url})
+                logger.warning(
+                    "retrying http error", extra={"status": response.status_code, "url": url}
+                )
                 raise RetryableHTTPError(f"HTTP {response.status_code} from {url}")
             if not response.ok:
                 logger.error(

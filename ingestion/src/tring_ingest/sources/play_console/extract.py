@@ -20,7 +20,9 @@ logger = get_logger(__name__)
 _REVIEWS_PAGE_SIZE = 100
 
 
-def _pull_metric_set(client: PlayConsoleClient, ms: dict, date_from: dict, date_to: dict) -> list[dict]:
+def _pull_metric_set(
+    client: PlayConsoleClient, ms: dict, date_from: dict, date_to: dict
+) -> list[dict]:
     payload = ReportingQueryPayload(
         metric_set_name=ms["name"],
         metrics=ms["metrics"],

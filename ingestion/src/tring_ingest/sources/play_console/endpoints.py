@@ -26,13 +26,21 @@ METRIC_SETS = [
     {
         "name": "stuckBackgroundWakelockRateMetricSet",
         "table": "raw_stuck_bg_wakelock_rate",
-        "metrics": ["stuckBgWakelockRate", "stuckBgWakelockRate7dUserWeighted", "stuckBgWakelockRate28dUserWeighted"],
+        "metrics": [
+            "stuckBgWakelockRate",
+            "stuckBgWakelockRate7dUserWeighted",
+            "stuckBgWakelockRate28dUserWeighted",
+        ],
         "dimensions": ["versionCode"],
     },
     {
         "name": "excessiveWakeupRateMetricSet",
         "table": "raw_excessive_wakeup_rate",
-        "metrics": ["excessiveWakeupRate", "excessiveWakeupRate7dUserWeighted", "excessiveWakeupRate28dUserWeighted"],
+        "metrics": [
+            "excessiveWakeupRate",
+            "excessiveWakeupRate7dUserWeighted",
+            "excessiveWakeupRate28dUserWeighted",
+        ],
         "dimensions": ["versionCode"],
     },
     {
@@ -85,7 +93,9 @@ def flatten_reporting_row(row: dict, metric_set_name: str) -> dict:
     out: dict = {"metric_set": metric_set_name}
 
     start = row.get("startTime", {})
-    out["date"] = f"{start.get('year','')}-{str(start.get('month','')).zfill(2)}-{str(start.get('day','')).zfill(2)}"
+    out["date"] = (
+        f"{start.get('year', '')}-{str(start.get('month', '')).zfill(2)}-{str(start.get('day', '')).zfill(2)}"
+    )
     out["aggregation_period"] = row.get("aggregationPeriod", "")
 
     for dim in row.get("dimensions", []):

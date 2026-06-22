@@ -24,7 +24,9 @@ def _search_all_campaigns(client: MoEngageClient) -> list[dict]:
     campaigns = []
     page = 1
     while True:
-        payload = SearchPayload(page=page).to_dict(request_id=f"tring-search-{uuid.uuid4().hex[:8]}")
+        payload = SearchPayload(page=page).to_dict(
+            request_id=f"tring-search-{uuid.uuid4().hex[:8]}"
+        )
         resp = client.post(SEARCH_PATH, payload)
         batch = resp.json()
         if not isinstance(batch, list):

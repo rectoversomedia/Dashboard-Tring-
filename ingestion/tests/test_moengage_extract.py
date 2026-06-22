@@ -61,7 +61,12 @@ class TestFlattenStats:
                         "default": {
                             "variations": {
                                 "all_variations": {
-                                    "performance_stats": {"sent": 100, "impression": 80, "click": 20, "ctr": 0.25},
+                                    "performance_stats": {
+                                        "sent": 100,
+                                        "impression": 80,
+                                        "click": 20,
+                                        "ctr": 0.25,
+                                    },
                                     "delivery_funnel": {},
                                     "conversion_goal_stats": {},
                                 }
@@ -82,8 +87,32 @@ class TestFlattenStats:
 
         stats_data = {
             "platforms": {
-                "ANDROID": {"locales": {"default": {"variations": {"all_variations": {"performance_stats": {"sent": 100}, "delivery_funnel": {}, "conversion_goal_stats": {}}}}}},
-                "IOS": {"locales": {"default": {"variations": {"all_variations": {"performance_stats": {"sent": 10}, "delivery_funnel": {}, "conversion_goal_stats": {}}}}}},
+                "ANDROID": {
+                    "locales": {
+                        "default": {
+                            "variations": {
+                                "all_variations": {
+                                    "performance_stats": {"sent": 100},
+                                    "delivery_funnel": {},
+                                    "conversion_goal_stats": {},
+                                }
+                            }
+                        }
+                    }
+                },
+                "IOS": {
+                    "locales": {
+                        "default": {
+                            "variations": {
+                                "all_variations": {
+                                    "performance_stats": {"sent": 10},
+                                    "delivery_funnel": {},
+                                    "conversion_goal_stats": {},
+                                }
+                            }
+                        }
+                    }
+                },
             }
         }
         rows = _flatten_stats("campaign-abc", stats_data)

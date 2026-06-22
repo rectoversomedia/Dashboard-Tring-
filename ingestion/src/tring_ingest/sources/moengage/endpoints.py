@@ -39,13 +39,15 @@ def build_stats_chunks(
     while chunk_start <= end:
         chunk_end = min(chunk_start + timedelta(days=STATS_MAX_WINDOW_DAYS - 1), end)
         for i in range(0, max(len(campaign_ids), 1), STATS_MAX_CAMPAIGN_IDS):
-            id_batch = campaign_ids[i: i + STATS_MAX_CAMPAIGN_IDS]
-            chunks.append({
-                "campaign_ids": id_batch,
-                "start_date": chunk_start.isoformat(),
-                "end_date": chunk_end.isoformat(),
-                "attribution_type": attribution_type,
-                "metric_type": metric_type,
-            })
+            id_batch = campaign_ids[i : i + STATS_MAX_CAMPAIGN_IDS]
+            chunks.append(
+                {
+                    "campaign_ids": id_batch,
+                    "start_date": chunk_start.isoformat(),
+                    "end_date": chunk_end.isoformat(),
+                    "attribution_type": attribution_type,
+                    "metric_type": metric_type,
+                }
+            )
         chunk_start = chunk_end + timedelta(days=1)
     return chunks

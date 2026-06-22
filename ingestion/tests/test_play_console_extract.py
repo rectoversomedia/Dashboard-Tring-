@@ -1,4 +1,5 @@
 """Tests for Play Console extract: flatten helpers, pagination, extract flow."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +14,7 @@ from tring_ingest.sources.play_console.extract import _pull_all_reviews, _pull_m
 
 # --- date_str_to_dict ---
 
+
 def test_date_str_to_dict():
     assert date_str_to_dict("2026-05-01") == {"year": 2026, "month": 5, "day": 1}
 
@@ -24,10 +26,16 @@ def test_date_str_to_dict_zero_pad():
 
 # --- flatten_reporting_row ---
 
+
 def _make_reporting_row(metric_name="crashRate", metric_value="0.0013"):
     return {
         "aggregationPeriod": "DAILY",
-        "startTime": {"year": 2026, "month": 5, "day": 1, "timeZone": {"id": "America/Los_Angeles"}},
+        "startTime": {
+            "year": 2026,
+            "month": 5,
+            "day": 1,
+            "timeZone": {"id": "America/Los_Angeles"},
+        },
         "dimensions": [{"dimension": "versionCode", "stringValue": "191"}],
         "metrics": [
             {
@@ -84,6 +92,7 @@ def test_flatten_reporting_row_multi_dimension():
 
 # --- flatten_review ---
 
+
 def _make_review(star=4, has_reply=False):
     review = {
         "reviewId": "abc-123",
@@ -110,12 +119,14 @@ def _make_review(star=4, has_reply=False):
         ],
     }
     if has_reply:
-        review["comments"].append({
-            "developerComment": {
-                "text": "Thanks!",
-                "lastModified": {"seconds": "1781900000"},
+        review["comments"].append(
+            {
+                "developerComment": {
+                    "text": "Thanks!",
+                    "lastModified": {"seconds": "1781900000"},
+                }
             }
-        })
+        )
     return review
 
 
@@ -143,13 +154,16 @@ def test_flatten_review_star_rating():
 
 # --- _pull_metric_set ---
 
+
 def test_pull_metric_set_returns_flattened():
     client = MagicMock()
     client.post.return_value.json.return_value = {
         "rows": [_make_reporting_row("crashRate", "0.001")]
     }
     ms = METRIC_SETS[0]  # crashRateMetricSet
-    rows = _pull_metric_set(client, ms, {"year": 2026, "month": 5, "day": 1}, {"year": 2026, "month": 6, "day": 1})
+    rows = _pull_metric_set(
+        client, ms, {"year": 2026, "month": 5, "day": 1}, {"year": 2026, "month": 6, "day": 1}
+    )
     assert len(rows) == 1
     assert rows[0]["metric_set"] == "crashRateMetricSet"
     assert rows[0]["crashRate"] == "0.001"
@@ -163,6 +177,7 @@ def test_pull_metric_set_empty_response():
 
 
 # --- _pull_all_reviews ---
+
 
 def test_pull_all_reviews_single_page():
     client = MagicMock()
@@ -197,6 +212,7 @@ def test_pull_all_reviews_empty():
 
 # --- extract run flow ---
 
+
 @patch("tring_ingest.sources.play_console.extract.load_json_rows_to_raw")
 @patch("tring_ingest.sources.play_console.extract.PlayConsoleClient")
 def test_run_calls_all_metric_sets_and_reviews(mock_client_cls, mock_loader):
@@ -208,6 +224,7 @@ def test_run_calls_all_metric_sets_and_reviews(mock_client_cls, mock_loader):
     }
 
     from tring_ingest.sources.play_console.extract import run
+
     run(date_from="2026-05-01", date_to="2026-06-01", sa_key_json='{"type":"service_account"}')
 
     # 6 metric sets + 1 reviews call
@@ -229,5 +246,6 @@ def test_run_collects_errors_raises_at_end(mock_client_cls, mock_loader):
     }
 
     from tring_ingest.sources.play_console.extract import run
+
     with pytest.raises(RuntimeError, match="Extract failed"):
         run(date_from="2026-05-01", date_to="2026-06-01", sa_key_json='{"type":"service_account"}')
