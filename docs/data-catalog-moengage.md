@@ -8,8 +8,8 @@ Reference date for row counts: **2026-06-22** (validated from E2E run: 599 campa
 
 | Endpoint | BQ Table | Rows (one-time full pull) | Columns |
 |---|---|---|---|
-| `/core-services/v1/campaigns/search` (POST) | `moengage_raw.raw_campaigns` | 599 | 9 source + 8 meta |
-| `/core-services/v1/campaign-stats` (POST) | `moengage_raw.raw_campaign_stats` | 4712 | 15 source + 8 meta |
+| `/core-services/v1/campaigns/search` (POST) | `moengage_raw.raw_campaigns` | 599 | 9 source + 7 meta |
+| `/core-services/v1/campaign-stats` (POST) | `moengage_raw.raw_campaign_stats` | 4712 | 15 source + 7 meta |
 
 > `raw_campaign_stats` rows = campaigns x platforms x variations x locale x date windows. 599 campaigns x ~8 platforms/variations average = 4712.
 
@@ -62,7 +62,7 @@ Reference date for row counts: **2026-06-22** (validated from E2E run: 599 campa
 - **Method:** POST
 - **Body:** `{"campaign_ids": [...], "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "attribution_type": "...", "metric_type": "...", "request_id": "..."}`
 - **BQ table:** `moengage_raw.raw_campaign_stats`
-- **Response shape:** wrapped dict with `stats_summary` key
+- **Response shape:** wrapped dict; the per-campaign stats live under the `data` key (`resp.json()["data"]`, keyed by campaign_id). The dict also carries `response_id`, `total_campaigns`, `current_page`, `total_pages`.
 - **API constraints:**
   - Max **10 campaign IDs per request** (hard limit)
   - Max **30-day date window** per request
@@ -100,7 +100,7 @@ Reference date for row counts: **2026-06-22** (validated from E2E run: 599 campa
 
 ---
 
-## Meta columns (both tables, 8)
+## Meta columns (both tables, 7)
 
 All meta columns are injected by the ingestion layer at load time.
 
@@ -113,7 +113,6 @@ All meta columns are injected by the ingestion layer at load time.
 | `_extract_to` | STRING (DATE) | End of date window |
 | `_app_id` | STRING | Empty string for MoEngage (workspace-level, not app-level) |
 | `_platform` | STRING | Empty string for MoEngage (platform comes from API response column) |
-| `_schema_flag` | STRING | `ok` if columns match contract; flagged if schema drifts |
 
 ---
 
@@ -136,13 +135,13 @@ All meta columns are injected by the ingestion layer at load time.
 - `delivery_funnel`, `conversion_goal_stats` kept as opaque strings
 
 ### Mart: mart_moengage_push (Group A - Push Metrics)
-- Grain: `campaign_id x platform x stats_date_from`
+- Grain: `campaign_id x platform x stats_date_from x stats_date_to` (the GROUP BY also carries `channel`, `campaign_status`, `campaign_delivery_type` from the joined campaigns table, but those are functionally dependent on `campaign_id`, so the effective grain is one row per campaign x platform x stats window)
 - Filter: `variation = 'all_variations'` (avoids double-counting per-variation rows)
 - Metrics: `sent`, `open_proxy` (= impression), `click`, `click_rate`, `open_proxy_rate`
 - Partition: `stats_date_from` (DATE); Cluster: `platform, channel`
 
 ### Mart: mart_moengage_campaign_analytics (Group E - Campaign Analytics)
-- Grain: `campaign_id x platform x stats_date_from`
+- Grain: `campaign_id x platform x stats_date_from x stats_date_to` (the GROUP BY also includes `channel`, `campaign_status`, `campaign_delivery_type`, `campaign_basic_details` and the `conversion_goal_stats_raw` expression, all functionally dependent on `campaign_id`, so the effective grain is one row per campaign x platform x stats window)
 - Filter: `variation = 'all_variations'`
 - Adds: `campaign_basic_details` (raw metadata string), full delivery funnel (`attempted`, `failed`)
 - Metrics: `open_proxy_rate`, `click_rate`, `delivery_rate`, `conversion_goal_stats_raw`

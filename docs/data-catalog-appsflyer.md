@@ -8,14 +8,14 @@ Reference date for row counts: **2026-06-13 to 2026-06-14** (2-day window, valid
 
 | Endpoint | BQ Table | Platform | Rows (2d sample) | Columns |
 |---|---|---|---|---|
-| installs_report/v5 | `appsflyer_raw.raw_installs` | Android | ~2,086 | 81 source + 8 meta |
-| installs_report/v5 | `appsflyer_raw.raw_installs` | iOS | ~88 | 81 source + 8 meta |
-| in_app_events_report/v5 | `appsflyer_raw.raw_in_app_events` | Android | ~200,000+ | 81 source + 8 meta |
-| in_app_events_report/v5 | `appsflyer_raw.raw_in_app_events` | iOS | ~84,961 | 81 source + 8 meta |
-| blocked_installs_report/v5 | `appsflyer_raw.raw_blocked_installs` | Android | ~86 | 81 source + 8 meta |
-| blocked_installs_report/v5 | `appsflyer_raw.raw_blocked_installs` | iOS | ~234 | 81 source + 8 meta |
-| master-agg-data/v4 | `appsflyer_raw.raw_campaign_performance` | Android | ~189 | 8 source + 8 meta |
-| master-agg-data/v4 | `appsflyer_raw.raw_campaign_performance` | iOS | ~107 | 8 source + 8 meta |
+| installs_report/v5 | `appsflyer_raw.raw_installs` | Android | ~2,086 | 81 source + 7 meta |
+| installs_report/v5 | `appsflyer_raw.raw_installs` | iOS | ~88 | 81 source + 7 meta |
+| in_app_events_report/v5 | `appsflyer_raw.raw_in_app_events` | Android | ~200,000+ | 81 source + 7 meta |
+| in_app_events_report/v5 | `appsflyer_raw.raw_in_app_events` | iOS | ~84,961 | 81 source + 7 meta |
+| blocked_installs_report/v5 | `appsflyer_raw.raw_blocked_installs` | Android | ~86 | 81 source + 7 meta |
+| blocked_installs_report/v5 | `appsflyer_raw.raw_blocked_installs` | iOS | ~234 | 81 source + 7 meta |
+| master-agg-data/v4 | `appsflyer_raw.raw_campaign_performance` | Android | ~189 | 8 source + 7 meta |
+| master-agg-data/v4 | `appsflyer_raw.raw_campaign_performance` | iOS | ~107 | 8 source + 7 meta |
 
 > `in_app_events` Android volume is very high (~100k rows/day). AppsFlyer enforces a daily download limit per app  -  see Known Issues below.
 
@@ -181,7 +181,7 @@ Reference date for row counts: **2026-06-13 to 2026-06-14** (2-day window, valid
 
 ## Raw Table Schema (all tables)
 
-All source columns are stored as `STRING`. Eight metadata columns appended by the ingestion layer:
+All source columns are stored as `STRING`. Seven metadata columns appended by the ingestion layer:
 
 | Metadata Column | Type | Description |
 |---|---|---|
@@ -192,7 +192,6 @@ All source columns are stored as `STRING`. Eight metadata columns appended by th
 | `_run_id` | STRING | Unique ID per extract run (groups all pulls in one job execution) |
 | `_extract_from` | DATE | `from` param used in API call |
 | `_extract_to` | DATE | `to` param used in API call |
-| `_schema_flag` | STRING | Schema-version marker for the raw load |
 
 ---
 
@@ -297,9 +296,9 @@ Multiple job executions during OOM debugging consumed the 12-call daily quota fo
 
 ---
 
-## dbt Tests (53 tests  -  part of `dbt build` PASS=63 WARN=0 ERROR=0)
+## dbt Tests (53 AppsFlyer tests)
 
-> `dbt build` reports **PASS=63** = 53 tests + 4 staging views + 5 mart tables + 1 seed (63 nodes total). The counts below are the **test** count only (53), exact from the manifest.
+> The AppsFlyer slice of the dbt project is **63 nodes** = 53 tests + 4 staging views + 5 mart tables + 1 seed. The counts below are the AppsFlyer **test** count only (53), exact from the manifest. Note: `dbt build` runs the whole project (AppsFlyer + MoEngage + Play Console) in one pass and reports the combined total, currently **PASS=140 WARN=0 ERROR=0**. The 63 here is the AppsFlyer-only node breakdown, not what `dbt build` prints.
 
 | Test type | Count | Example checks |
 |---|---|---|

@@ -10,13 +10,13 @@ Data model diagram: `PlayConsole_v1.drawio` at repo root (`tring-repo/PlayConsol
 
 | Data Type | BQ Table | Source API | Columns |
 |---|---|---|---|
-| Crash rate | `play_raw.raw_crash_rate` | Play Developer Reporting API | 3 metrics + CI bounds + versionCode + 8 meta |
-| ANR rate | `play_raw.raw_anr_rate` | Play Developer Reporting API | 3 metrics + CI bounds + versionCode + 8 meta |
-| Stuck background wakelock rate | `play_raw.raw_stuck_bg_wakelock_rate` | Play Developer Reporting API | 3 metrics + versionCode + 8 meta (no CI) |
-| Excessive wakeup rate | `play_raw.raw_excessive_wakeup_rate` | Play Developer Reporting API | 3 metrics + versionCode + 8 meta (no CI) |
-| Error count | `play_raw.raw_error_count` | Play Developer Reporting API | 2 metrics + reportType + versionCode + 8 meta |
-| Slow start rate | `play_raw.raw_slow_start_rate` | Play Developer Reporting API | 3 metrics + versionCode + startType + 8 meta (no CI) |
-| Reviews | `play_raw.raw_reviews` | Android Publisher API | 16 source + 8 meta |
+| Crash rate | `play_raw.raw_crash_rate` | Play Developer Reporting API | 3 metrics + CI bounds + versionCode + 7 meta |
+| ANR rate | `play_raw.raw_anr_rate` | Play Developer Reporting API | 3 metrics + CI bounds + versionCode + 7 meta |
+| Stuck background wakelock rate | `play_raw.raw_stuck_bg_wakelock_rate` | Play Developer Reporting API | 3 metrics + versionCode + 7 meta (no CI) |
+| Excessive wakeup rate | `play_raw.raw_excessive_wakeup_rate` | Play Developer Reporting API | 3 metrics + versionCode + 7 meta (no CI) |
+| Error count | `play_raw.raw_error_count` | Play Developer Reporting API | 2 metrics + reportType + versionCode + 7 meta |
+| Slow start rate | `play_raw.raw_slow_start_rate` | Play Developer Reporting API | 3 metrics + versionCode + startType + 7 meta (no CI) |
+| Reviews | `play_raw.raw_reviews` | Android Publisher API | 16 source + 7 meta |
 
 ---
 
@@ -177,7 +177,7 @@ No confidence interval columns (this metric set does not return CI bounds).
 
 ## Metadata Columns (all tables)
 
-All raw tables include 8 standard metadata columns appended by the loader:
+All raw tables include 7 standard metadata columns appended by the loader:
 
 | Column | Type | Description |
 |---|---|---|
@@ -186,7 +186,6 @@ All raw tables include 8 standard metadata columns appended by the loader:
 | _run_id | STRING | UUID identifying this extract run |
 | _extract_from | DATE | date_from passed to the extract job |
 | _extract_to | DATE | date_to passed to the extract job |
-| _schema_flag | STRING | Non-empty if new columns appeared vs previous run (schema drift detection) |
 | _app_id | STRING | Not used for Play Console (empty string) |
 | _platform | STRING | Not used for Play Console (empty string) |
 

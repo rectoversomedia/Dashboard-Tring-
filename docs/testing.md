@@ -64,16 +64,16 @@ What it does: exits with error if any file would be reformatted. Used in CI to b
 uv run pytest tests/ -v
 ```
 
-What it does: runs all test cases in `tests/`. The `-v` flag shows each test name and pass/fail individually. Current suite: 40 tests total (12 AppsFlyer + 12 MoEngage + 16 Play Console), all PASS.
+What it does: runs all test cases in `tests/`. The `-v` flag shows each test name and pass/fail individually. Current suite: 38 tests total (10 AppsFlyer + 12 MoEngage + 16 Play Console), all PASS.
 
 ### Test cases covered
 
-**AppsFlyer (`test_appsflyer_extract.py`) - 12 tests:**
+**AppsFlyer (`test_appsflyer_extract.py`) - 10 tests:**
 
 | Test class | Tests | What it tests |
 |---|---|---|
 | `TestEndpoints` | 5 | Endpoint count = 4, correct names, correct BQ table names, timezone param present, geo grouping in master-agg |
-| `TestBqLoader` | 4 | Empty CSV returns 0 rows, all metadata columns stamped on rows, schema drift flag set when columns differ, schema flag empty when columns match |
+| `TestBqLoader` | 2 | Empty CSV returns 0 rows, all metadata columns stamped on rows |
 | `TestExtractRun` | 2 | 8 HTTP pulls fired (4 endpoints x 2 app IDs), raises error when any pull fails |
 | `TestHttpRetry` | 1 | Retryable HTTP status triggers retry path |
 

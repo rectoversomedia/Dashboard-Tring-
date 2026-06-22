@@ -348,7 +348,7 @@ Common causes:
 
 ## 11. Adding a new data source
 
-**MoEngage** - fully implemented and E2E verified (2026-06-22: 599 campaigns, 4712 stats rows, exit(0), full pipeline SUCCEEDED). GCP infra provisioned (SA, secret, BQ datasets, Cloud Run Job `extract-moengage`). dbt models built (`stg_moengage_campaigns`, `stg_moengage_campaign_stats`, `mart_moengage_push`, `mart_moengage_campaign_analytics`). pipeline.yaml runs both extracts in parallel (PASS=93 WARN=0 ERROR=0).
+**MoEngage** - fully implemented and E2E verified (2026-06-22: 599 campaigns, 4712 stats rows, exit(0), full pipeline SUCCEEDED). GCP infra provisioned (SA, secret, BQ datasets, Cloud Run Job `extract-moengage`). dbt models built (`stg_moengage_campaigns`, `stg_moengage_campaign_stats`, `mart_moengage_push`, `mart_moengage_campaign_analytics`). pipeline.yaml runs all three extracts (AppsFlyer + MoEngage + Play Console) in parallel; full-pipeline dbt run is PASS=140 WARN=0 ERROR=0.
 
 **Play Console** - FULLY DONE (2026-06-22). Ingestion code (16 tests PASS) + GCP infra (SA, secret, BQ datasets, Cloud Run Job) + dbt models (7 staging + 2 mart, PASS=140 WARN=0 ERROR=0 E2E verified) + pipeline.yaml (3 parallel branches, Workflow rev 000012-e43). Uses SA key from client prod project `pgd-prd-digital-rating-tring` stored in Secret Manager.
 
