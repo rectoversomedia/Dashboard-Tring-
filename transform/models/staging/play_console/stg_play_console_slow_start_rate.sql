@@ -15,8 +15,6 @@ typed as (
         startType                                                   as start_type,
 
         safe_cast(slowStartRate as float64)                         as slow_start_rate,
-        safe_cast(slowStartRate_ci_lower as float64)                as slow_start_rate_ci_lower,
-        safe_cast(slowStartRate_ci_upper as float64)                as slow_start_rate_ci_upper,
         safe_cast(slowStartRate7dUserWeighted as float64)           as slow_start_rate_7d,
         safe_cast(slowStartRate28dUserWeighted as float64)          as slow_start_rate_28d,
 

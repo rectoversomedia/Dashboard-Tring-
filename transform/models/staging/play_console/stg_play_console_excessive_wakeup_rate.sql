@@ -13,8 +13,6 @@ typed as (
         safe_cast(versionCode as int64)                                 as version_code,
 
         safe_cast(excessiveWakeupRate as float64)                       as excessive_wakeup_rate,
-        safe_cast(excessiveWakeupRate_ci_lower as float64)              as excessive_wakeup_rate_ci_lower,
-        safe_cast(excessiveWakeupRate_ci_upper as float64)              as excessive_wakeup_rate_ci_upper,
         safe_cast(excessiveWakeupRate7dUserWeighted as float64)         as excessive_wakeup_rate_7d,
         safe_cast(excessiveWakeupRate28dUserWeighted as float64)        as excessive_wakeup_rate_28d,
 

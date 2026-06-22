@@ -13,8 +13,6 @@ typed as (
         safe_cast(versionCode as int64)                                 as version_code,
 
         safe_cast(stuckBgWakelockRate as float64)                       as stuck_bg_wakelock_rate,
-        safe_cast(stuckBgWakelockRate_ci_lower as float64)              as stuck_bg_wakelock_rate_ci_lower,
-        safe_cast(stuckBgWakelockRate_ci_upper as float64)              as stuck_bg_wakelock_rate_ci_upper,
         safe_cast(stuckBgWakelockRate7dUserWeighted as float64)         as stuck_bg_wakelock_rate_7d,
         safe_cast(stuckBgWakelockRate28dUserWeighted as float64)        as stuck_bg_wakelock_rate_28d,
 
