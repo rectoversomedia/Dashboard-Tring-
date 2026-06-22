@@ -69,6 +69,19 @@ Key lines to look for:
 - `Extract complete` (exit 0) → success
 - Any `ERROR` or non-zero exit → failure; check API connectivity or secret rotation
 
+**Step 2c  -  Check Play Console extract logs:**
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="extract-play-console"' \
+  --project=$PROJECT \
+  --limit=50 \
+  --order=desc \
+  --format="table(timestamp,textPayload)"
+```
+
+Key lines to look for:
+- `Extract complete: 7 pulls` (6 metric sets + reviews, exit 0) → success
+- `Extract failed for: [...]` → one or more metric sets failed; check error details above
+
 **Step 3  -  Check dbt logs (look for PASS=93 ERROR=0):**
 ```bash
 gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="dbt-transform"' \
@@ -112,6 +125,16 @@ gcloud run jobs execute extract-moengage \
   --project=$PROJECT \
   --update-env-vars="DATE_FROM=2026-06-19,DATE_TO=2026-06-19"
 ```
+
+**Extract Play Console only (bypass Workflow):**
+```bash
+gcloud run jobs execute extract-play-console \
+  --region=asia-southeast2 \
+  --project=$PROJECT \
+  --update-env-vars="DATE_FROM=2026-06-19,DATE_TO=2026-06-19"
+```
+
+> Note: Play Console reviews are not date-scoped (the API always returns the current state of all reviews). DATE_FROM/DATE_TO affect only the metric set queries (crash rate, ANR rate, etc).
 
 **dbt only (bypass Workflow):**
 ```bash
@@ -185,7 +208,29 @@ gcloud secrets versions disable VERSION_NUMBER \
 
 ---
 
-## 7. Known issue: AppsFlyer in_app_events rate limit
+## 7. Rotating the Play Console service account key
+
+The Play Console secret is a full SA key JSON (not a simple token). To rotate:
+
+1. Go to GCP IAM > Service Accounts > `sa-extract-play-console` > Keys
+2. Create a new key (JSON format) - download it
+3. Add to Secret Manager:
+```bash
+cat new-sa-key.json | gcloud secrets versions add play-console-sa-key --data-file=- --project=$PROJECT
+rm new-sa-key.json
+```
+4. Disable the old version:
+```bash
+gcloud secrets versions list play-console-sa-key --project=$PROJECT
+gcloud secrets versions disable OLD_VERSION_NUMBER --secret=play-console-sa-key --project=$PROJECT
+```
+5. Delete the old key from GCP IAM to revoke it completely.
+
+> If the SA key is compromised, disable the old Secret Manager version AND delete the key from GCP IAM immediately. The Cloud Run Job picks up the new version on the next execution (secrets are resolved at job start).
+
+---
+
+## 9. Known issue: AppsFlyer in_app_events rate limit
 
 AppsFlyer limits: `in_app_events` 12 calls/day/app, `installs` 24/day/app. When hit:
 
@@ -199,7 +244,7 @@ AppsFlyer limits: `in_app_events` 12 calls/day/app, `installs` 24/day/app. When 
 
 ---
 
-## 8. Checking for failures (no alerting provisioned)
+## 10. Checking for failures (no alerting provisioned)
 
 There is no automated alert. Failures surface as a `FAILED` Workflow execution. Check periodically, or after a scheduled run:
 
@@ -218,9 +263,11 @@ Common causes:
 
 ---
 
-## 9. Adding a new source (Play Console, App Store Connect)
+## 11. Adding a new source (App Store Connect)
 
-**MoEngage** - fully implemented and E2E verified (2026-06-21: 599 campaigns, 4712 stats rows, exit(0), full pipeline SUCCEEDED). GCP infra provisioned (SA, secret, BQ datasets, Cloud Run Job `extract-moengage`). dbt models built (`stg_moengage_campaigns`, `stg_moengage_campaign_stats`, `mart_moengage_push`, `mart_moengage_campaign_analytics`). pipeline.yaml runs both extracts in parallel (PASS=93 WARN=0 ERROR=0).
+**MoEngage** - fully implemented and E2E verified (2026-06-22: 599 campaigns, 4712 stats rows, exit(0), full pipeline SUCCEEDED). GCP infra provisioned (SA, secret, BQ datasets, Cloud Run Job `extract-moengage`). dbt models built (`stg_moengage_campaigns`, `stg_moengage_campaign_stats`, `mart_moengage_push`, `mart_moengage_campaign_analytics`). pipeline.yaml runs both extracts in parallel (PASS=93 WARN=0 ERROR=0).
+
+**Play Console** - ingestion code implemented (2026-06-22: `client.py`, `endpoints.py`, `extract.py`, 16 tests PASS). Pulls 6 metric sets (crash rate, ANR rate, stuck wakelock, excessive wakeup, error count, slow start) + paginated reviews via Google Play Developer Reporting API and Android Publisher API. GCP infra NOT YET provisioned (SA, secret, BQ datasets, Cloud Run Job). dbt models NOT YET built. pipeline.yaml NOT YET updated to include play_console branch.
 
 General steps for any new source:
 
@@ -279,7 +326,7 @@ gcloud run jobs create extract-moengage \
 
 ---
 
-## 10. Deploying a change
+## 12. Deploying a change
 
 ```bash
 # Build + push new image
@@ -299,6 +346,11 @@ gcloud run jobs update extract-moengage \
   --region=asia-southeast2 \
   --project=$PROJECT
 
+gcloud run jobs update extract-play-console \
+  --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/ingestion:latest \
+  --region=asia-southeast2 \
+  --project=$PROJECT
+
 gcloud run jobs update dbt-transform \
   --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/dbt:latest \
   --region=asia-southeast2 \
@@ -307,7 +359,7 @@ gcloud run jobs update dbt-transform \
 
 ---
 
-## 11. Checking dbt model freshness
+## 13. Checking dbt model freshness
 
 ```bash
 cd transform

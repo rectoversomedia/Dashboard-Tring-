@@ -29,13 +29,13 @@ export PROJECT=YOUR_CLIENT_GCP_PROJECT_ID
 
 Then run sections 1–10 of `docs/gcp-setup.md` in order:
 1. Enable APIs
-2. Create service accounts (sa-extract-appsflyer, sa-extract-moengage, sa-dbt, sa-workflows, sa-scheduler)
+2. Create service accounts (sa-extract-appsflyer, sa-extract-moengage, sa-extract-play-console, sa-dbt, sa-workflows, sa-scheduler)
 3. Grant IAM roles
-4. Create secrets (AppsFlyer token + MoEngage credentials  -  see note below)
+4. Create secrets (AppsFlyer token + MoEngage credentials + Play Console SA key  -  see note below)
 5. Create Artifact Registry repository
-6. Create BigQuery datasets (6 total: appsflyer + moengage, each raw/staging/mart)
+6. Create BigQuery datasets (9 total: appsflyer, moengage, and play_console, each raw/staging/mart)
 7. Build and push container images
-8. Create Cloud Run Jobs (extract-appsflyer, extract-moengage, dbt-transform)
+8. Create Cloud Run Jobs (extract-appsflyer, extract-moengage, extract-play-console, dbt-transform)
 9. Deploy Cloud Workflows (pipeline)
 10. Create Cloud Scheduler jobs (twice-daily trigger)
 
@@ -44,6 +44,7 @@ Then run sections 1–10 of `docs/gcp-setup.md` in order:
 > **Secret note:** The consultant never needs to see the production secrets. The client's admin retrieves them directly from each vendor and adds them to Secret Manager themselves:
 > - **AppsFlyer:** token from the AppsFlyer dashboard (Configuration > API Token v3) into secret `appsflyer-api-token`.
 > - **MoEngage:** workspace ID + API key from the MoEngage dashboard (Settings > APIs) into secret `moengage-api-creds`, formatted as `WORKSPACE_ID:API_KEY` (colon-delimited, no spaces).
+> - **Play Console:** service account key JSON file, downloaded from GCP IAM after linking the SA to Google Play Console (see `docs/data-catalog-play-console.md` for full setup steps). Store in secret `play-console-sa-key`. Delete the local key file after adding to Secret Manager.
 
 ---
 
@@ -224,7 +225,7 @@ gcloud workflows executions list pipeline \
   --limit=5
 ```
 
-Expected: `state: SUCCEEDED`. Two extract jobs run in parallel: extract-appsflyer (8 reports: 4 endpoints x 2 platforms) and extract-moengage (campaign + stats data). After both complete, dbt-transform runs (`PASS=93 WARN=0 ERROR=0`). See `docs/runbook.md` section 2 for how to verify each stage.
+Expected: `state: SUCCEEDED`. Extract jobs run in parallel (currently extract-appsflyer + extract-moengage; extract-play-console added once its GCP infra is provisioned). After all extracts complete, dbt-transform runs. See `docs/runbook.md` section 2 for how to verify each stage.
 
 ---
 
@@ -233,7 +234,7 @@ Expected: `state: SUCCEEDED`. Two extract jobs run in parallel: extract-appsflye
 | Event | What happens automatically |
 |---|---|
 | Push to `main` on GitLab | Cloud Build trigger fires → build images → roll new images onto Cloud Run Jobs |
-| Cloud Scheduler (twice daily, 08:00 and 20:00 WIB) | Triggers Cloud Workflows → runs extract-appsflyer (8 pulls) and extract-moengage in parallel → runs dbt |
+| Cloud Scheduler (twice daily, 08:00 and 20:00 WIB) | Triggers Cloud Workflows → runs extract-appsflyer (8 pulls) and extract-moengage in parallel (play-console added after infra provisioned) → runs dbt |
 | Extractor failure | Workflow polling detects non-success, marks the execution `FAILED` (dbt does NOT run) |
 | dbt test failure | Job exits non-zero → Workflow marks the execution `FAILED` |
 
@@ -264,6 +265,7 @@ See `docs/runbook.md` for:
 | Operations runbook | `docs/runbook.md` |
 | Data catalog (AppsFlyer) | `docs/data-catalog-appsflyer.md` |
 | Data catalog (MoEngage) | `docs/data-catalog-moengage.md` |
+| Data catalog (Play Console) | `docs/data-catalog-play-console.md` |
 | CI/CD config | `cloudbuild/` |
 | Infrastructure as code (reference only) | `infra/` (Terraform  -  not used in deploy; gcloud is authoritative) |
 

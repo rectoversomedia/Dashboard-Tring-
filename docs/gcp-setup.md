@@ -22,12 +22,13 @@ gcloud services enable run.googleapis.com secretmanager.googleapis.com workflows
 ```bash
 gcloud iam service-accounts create sa-extract-appsflyer --display-name="AppsFlyer extractor runtime" --project=$PROJECT
 gcloud iam service-accounts create sa-extract-moengage --display-name="MoEngage extractor runtime" --project=$PROJECT
+gcloud iam service-accounts create sa-extract-play-console --display-name="Play Console extractor runtime" --project=$PROJECT
 gcloud iam service-accounts create sa-dbt --display-name="dbt transform runtime" --project=$PROJECT
 gcloud iam service-accounts create sa-workflows --display-name="Cloud Workflows orchestrator" --project=$PROJECT
 gcloud iam service-accounts create sa-scheduler --display-name="Cloud Scheduler trigger" --project=$PROJECT
 ```
 
-> **Adding a new source (Play Console, App Store Connect):** create a dedicated SA per source  -  `sa-extract-playstore`, etc. Grant only the roles that source needs. Never reuse an existing extractor SA for a different source.
+> **Adding a new source (App Store Connect):** create a dedicated SA per source. Grant only the roles that source needs. Never reuse an existing extractor SA for a different source.
 
 ---
 
@@ -67,6 +68,15 @@ Runs the MoEngage extract Cloud Run Job.
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com" --role="roles/bigquery.dataEditor"
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com" --role="roles/bigquery.jobUser"
 gcloud secrets add-iam-policy-binding moengage-api-creds --member="serviceAccount:sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor" --project=$PROJECT
+```
+
+### sa-extract-play-console
+Runs the Play Console extract Cloud Run Job. The service account must also be granted access in the Google Play Console UI (see Secret Manager section below).
+
+```bash
+gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com" --role="roles/bigquery.dataEditor"
+gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com" --role="roles/bigquery.jobUser"
+gcloud secrets add-iam-policy-binding play-console-sa-key --member="serviceAccount:sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor" --project=$PROJECT
 ```
 
 ### sa-scheduler
@@ -118,6 +128,30 @@ To rotate:
 echo -n "NEW_WORKSPACE_ID:NEW_API_KEY" | gcloud secrets versions add moengage-api-creds --data-file=- --project=$PROJECT
 ```
 
+### Play Console
+
+The Play Console secret stores the service account JSON key as a raw JSON string. The service account must have the "Play Developer Reporting API" and "Android Publisher API" permissions granted in the Google Play Console UI (Account settings > API access > Link to GCP project > grant access to your SA).
+
+```bash
+gcloud secrets create play-console-sa-key --replication-policy="automatic" --project=$PROJECT
+
+# Value: the full content of the SA key JSON file
+# Download the SA key from GCP IAM > Service Accounts > sa-extract-play-console > Keys
+# Then add it to Secret Manager and delete the local file immediately
+cat sa-extract-play-console-key.json | gcloud secrets versions add play-console-sa-key --data-file=- --project=$PROJECT
+rm sa-extract-play-console-key.json
+```
+
+> **Important:** The SA key JSON grants access to your GCP project. Treat it like a password. Never commit it to git - the `.gitignore` blocks `*.json` files at the repo root, but be careful with any path. After adding to Secret Manager, delete the local file.
+
+To rotate:
+```bash
+# Generate a new key in GCP IAM, add it to Secret Manager, then disable the old version
+cat new-sa-key.json | gcloud secrets versions add play-console-sa-key --data-file=- --project=$PROJECT
+rm new-sa-key.json
+gcloud secrets versions disable OLD_VERSION_NUMBER --secret=play-console-sa-key --project=$PROJECT
+```
+
 ---
 
 ## 5. Create Artifact Registry Repository
@@ -146,6 +180,14 @@ bq --project_id=$PROJECT mk --location=asia-southeast2 appsflyer_mart
 bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_raw
 bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_staging
 bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_mart
+```
+
+### Play Console
+
+```bash
+bq --project_id=$PROJECT mk --location=asia-southeast2 play_raw
+bq --project_id=$PROJECT mk --location=asia-southeast2 play_staging
+bq --project_id=$PROJECT mk --location=asia-southeast2 play_mart
 ```
 
 ---
@@ -215,6 +257,21 @@ gcloud run jobs create extract-moengage \
   --max-retries=0 \
   --project=$PROJECT
 
+# extract-play-console (same ingestion image, --source play_console)
+# PLAY_CONSOLE_SA_KEY env var name must match config.py: PLAY_CONSOLE_SECRET_NAME default is "play-console-sa-key"
+gcloud run jobs create extract-play-console \
+  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --region=asia-southeast2 \
+  --service-account=sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com \
+  --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET_RAW_PLAY_CONSOLE=play_raw,REGION=asia-southeast2" \
+  --set-secrets="PLAY_CONSOLE_SA_KEY=play-console-sa-key:latest" \
+  --command=python \
+  --args="-m,tring_ingest,--source,play_console" \
+  --memory=2Gi \
+  --cpu=1 \
+  --max-retries=0 \
+  --project=$PROJECT
+
 # dbt-transform
 # ENTRYPOINT is hardcoded in Dockerfile: ["dbt", "build", "--profiles-dir", "/app", "--target", "prod"]
 # Do NOT set --command or --args here  -  they override the Dockerfile ENTRYPOINT and break dbt
@@ -275,6 +332,11 @@ gcloud run jobs update extract-appsflyer \
   --project=$PROJECT
 
 gcloud run jobs update extract-moengage \
+  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --region=asia-southeast2 \
+  --project=$PROJECT
+
+gcloud run jobs update extract-play-console \
   --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
   --region=asia-southeast2 \
   --project=$PROJECT
@@ -369,6 +431,9 @@ If the client wants to adopt Terraform later: copy `infra/envs/prod/terraform.tf
 | sa-extract-moengage | bigquery.dataEditor | project |
 | sa-extract-moengage | bigquery.jobUser | project |
 | sa-extract-moengage | secretmanager.secretAccessor | secret: moengage-api-creds only |
+| sa-extract-play-console | bigquery.dataEditor | project |
+| sa-extract-play-console | bigquery.jobUser | project |
+| sa-extract-play-console | secretmanager.secretAccessor | secret: play-console-sa-key only |
 | sa-dbt | bigquery.dataEditor | project |
 | sa-dbt | bigquery.jobUser | project |
 | sa-workflows | run.invoker | project |

@@ -11,6 +11,7 @@ If you are new to this project, read in this order:
 5. **[testing.md](testing.md)** - how to test code changes before they reach GCP.
 6. **[data-catalog-appsflyer.md](data-catalog-appsflyer.md)** - reference for the AppsFlyer data: tables, columns, row counts, rate limits. Look things up here when you need detail; you do not need to read it top to bottom.
 7. **[data-catalog-moengage.md](data-catalog-moengage.md)** - reference for the MoEngage data: endpoints, columns, chunking limits, known metric behaviors (CTR scale, ALL_PLATFORMS, impression as open proxy). Look things up here when you need detail.
+8. **[data-catalog-play-console.md](data-catalog-play-console.md)** - reference for the Play Console data: metric sets, review fields, API endpoints, GCP infra setup. Look things up here when you need detail.
 
 ---
 
@@ -21,11 +22,14 @@ Twice a day, a timer (Cloud Scheduler) starts an orchestrator (Cloud Workflows).
 ```
 Cloud Scheduler (timer, 2x/day)
    -> Cloud Workflows (orchestrator)
-        -> [parallel] extract-appsflyer job   (download AppsFlyer API -> BigQuery raw)
-        -> [parallel] extract-moengage job    (download MoEngage API  -> BigQuery raw)
-        -> dbt-transform job                  (raw -> staging -> mart tables)
+        -> [parallel] extract-appsflyer job      (download AppsFlyer API -> BigQuery raw)
+        -> [parallel] extract-moengage job       (download MoEngage API  -> BigQuery raw)
+        -> [parallel] extract-play-console job   (download Play Console API -> BigQuery raw)
+        -> dbt-transform job                     (raw -> staging -> mart tables)
               -> Looker Studio dashboard reads the mart tables
 ```
+
+> Note: `extract-play-console` is in the diagram above but not yet wired into `pipeline.yaml` - it is the next step after GCP infra is provisioned. The current pipeline runs AppsFlyer + MoEngage in parallel.
 
 ---
 
@@ -40,7 +44,7 @@ Terms used throughout the docs, plain-language definitions.
 | **GCP** | Google Cloud Platform. The cloud provider everything runs on. |
 | **GCP project** | A container that holds all the cloud resources (jobs, datasets, secrets). Identified by a project ID (for example `my-company-data-prod`). Everything is scoped to one project. |
 | **BigQuery (BQ)** | Google's data warehouse. Where all the data lives, organized into datasets and tables. You query it with SQL. |
-| **Dataset** | A folder inside BigQuery that groups related tables. This project has six: `appsflyer_raw`, `appsflyer_staging`, `appsflyer_mart` for AppsFlyer data, and `moengage_raw`, `moengage_staging`, `moengage_mart` for MoEngage data. |
+| **Dataset** | A folder inside BigQuery that groups related tables. This project has nine: `appsflyer_raw`, `appsflyer_staging`, `appsflyer_mart` for AppsFlyer data; `moengage_raw`, `moengage_staging`, `moengage_mart` for MoEngage data; and `play_raw`, `play_staging`, `play_mart` for Play Console data. |
 | **Cloud Run Job** | A container that runs once, does its work, and stops (it is not a web server that stays up). The extract step and the dbt step are each a Cloud Run Job. |
 | **Cloud Workflows** | The orchestrator. A small script that runs the jobs in order and waits for each to finish before starting the next. |
 | **Cloud Scheduler** | A cron timer in the cloud. Fires on a schedule and starts the Workflow. |
