@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-
 SEARCH_PATH = "/core-services/v1/campaigns/search"
 STATS_PATH = "/core-services/v1/campaign-stats"
 

@@ -3,7 +3,7 @@ import base64
 import requests
 
 from tring_ingest.common.auth import get_secret
-from tring_ingest.common.config import MOENGAGE_SECRET_NAME, MOENGAGE_BASE_URL
+from tring_ingest.common.config import MOENGAGE_BASE_URL, MOENGAGE_SECRET_NAME
 from tring_ingest.common.http import RetryableHTTPError
 from tring_ingest.common.logging import get_logger
 
