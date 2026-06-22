@@ -13,6 +13,7 @@ This guide is for the client's GCP/DevOps admin. It covers the one-time setup ne
 | GCP provisioning (APIs, SA, IAM, secrets) | Client GCP admin | Once |
 | Cloud Build trigger setup (GitLab → GCP) | Client GCP admin | Once |
 | Push secrets (API tokens) | Client admin (not consultant) | Once, then on rotation |
+| Failure alerting (email on FAILED run) | Client GCP admin | Once, optional but recommended (Step 7) |
 | Git push to GitLab | Consultant / automated | Every code change |
 | Build, push images, deploy Cloud Run Jobs | Cloud Build (automatic) | Every push to `main` |
 | Pipeline run (extract + transform) | Cloud Scheduler (automatic) | Twice daily |
@@ -44,7 +45,7 @@ Then run sections 1–10 of `docs/gcp-setup.md` in order:
 > **Secret note:** The consultant never needs to see the production secrets. The client's admin retrieves them directly from each vendor and adds them to Secret Manager themselves:
 > - **AppsFlyer:** token from the AppsFlyer dashboard (Configuration > API Token v3) into secret `appsflyer-api-token`.
 > - **MoEngage:** workspace ID + API key from the MoEngage dashboard (Settings > APIs) into secret `moengage-api-creds`, formatted as `WORKSPACE_ID:API_KEY` (colon-delimited, no spaces).
-> - **Play Console:** SA key JSON from the client's production GCP project (`pgd-prd-digital-rating-tring`), SA `dashboard-monitoring-aiinsight`. This SA already has Play Console access — no Play Console UI setup needed. Store in secret `play-console-sa-key`. Delete the local key file after adding to Secret Manager.
+> - **Play Console:** SA key JSON from the client's production GCP project (`pgd-prd-digital-rating-tring`), SA `dashboard-monitoring-aiinsight`. This SA already has Play Console access - no Play Console UI setup needed. Store in secret `play-console-sa-key`. Delete the local key file after adding to Secret Manager.
 
 ---
 
@@ -228,6 +229,24 @@ gcloud workflows executions list pipeline \
 ```
 
 Expected: `state: SUCCEEDED`. Extract jobs run in parallel (extract-appsflyer, extract-moengage, extract-play-console). After all three complete, dbt-transform runs. See `docs/runbook.md` section 2 for how to verify each stage.
+
+---
+
+## Step 7: Set Up Failure Alerting (recommended)
+
+This step is optional but strongly recommended for production. Without it, a
+failed run is silent - nobody is told, and a broken pipeline can go unnoticed
+for days until someone checks manually or notices stale dashboards.
+
+Set up an email alert that fires whenever a pipeline run ends in `FAILED`. It
+takes about 10 minutes, once per project. The two `gcloud` commands (create a
+notification channel, then an alert policy) are in `docs/runbook.md` section 10
+("Adding email alerting"), with Slack and PagerDuty variants. `docs/gcp-setup.md`
+section 11 has the same commands in the provisioning context.
+
+Use a team distribution list as the alert email, not a personal inbox, so the
+alert survives staff changes. After setup, confirm it works by waiting for the
+next real failure or by deliberately failing a run.
 
 ---
 

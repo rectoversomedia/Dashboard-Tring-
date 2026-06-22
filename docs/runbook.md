@@ -213,7 +213,7 @@ gcloud secrets versions disable VERSION_NUMBER \
 The Play Console secret (`play-console-sa-key`) stores a SA key from the client's production GCP project (`pgd-prd-digital-rating-tring`), not from `hypefast-data-staging`. To rotate:
 
 1. Ask the client to generate a new key from their GCP IAM: SA `dashboard-monitoring-aiinsight@pgd-prd-digital-rating-tring.iam.gserviceaccount.com` > Keys > Add Key > JSON
-2. Client sends the new key file securely (never via email or Slack — use a secret sharing tool)
+2. Client sends the new key file securely (never via email or Slack - use a secret sharing tool)
 3. Add new version to Secret Manager:
 ```bash
 cat new-sa-key.json | gcloud secrets versions add play-console-sa-key --data-file=- --project=$PROJECT
@@ -351,6 +351,8 @@ Common causes:
 **MoEngage** - fully implemented and E2E verified (2026-06-22: 599 campaigns, 4712 stats rows, exit(0), full pipeline SUCCEEDED). GCP infra provisioned (SA, secret, BQ datasets, Cloud Run Job `extract-moengage`). dbt models built (`stg_moengage_campaigns`, `stg_moengage_campaign_stats`, `mart_moengage_push`, `mart_moengage_campaign_analytics`). pipeline.yaml runs both extracts in parallel (PASS=93 WARN=0 ERROR=0).
 
 **Play Console** - FULLY DONE (2026-06-22). Ingestion code (16 tests PASS) + GCP infra (SA, secret, BQ datasets, Cloud Run Job) + dbt models (7 staging + 2 mart, PASS=140 WARN=0 ERROR=0 E2E verified) + pipeline.yaml (3 parallel branches, Workflow rev 000012-e43). Uses SA key from client prod project `pgd-prd-digital-rating-tring` stored in Secret Manager.
+
+> **Adding an endpoint to a source that already exists** (one more AppsFlyer report, one more Play Console metric set, one more MoEngage call) is a smaller job - you do not create a new SA, secret, job, or dataset. See `docs/adding-endpoints.md` for that. The steps below are for a brand new source (a new vendor).
 
 General steps for any new source:
 

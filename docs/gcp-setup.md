@@ -13,6 +13,7 @@ One-time provisioning steps for each GCP project (dev or prod).
 > | `roles/run.admin` | Create and update Cloud Run Jobs (Section 8) |
 > | `roles/workflows.admin` | Deploy Cloud Workflows (Section 9) |
 > | `roles/cloudscheduler.admin` | Create Cloud Scheduler jobs (Section 10) |
+> | `roles/monitoring.editor` | Create notification channels and alert policies (Section 11, optional) |
 > | `roles/cloudbuild.builds.editor` | Submit Cloud Build jobs (Sections 7-8) |
 >
 > Check your current roles: GCP Console > IAM & Admin > IAM > filter by your email. If any role is missing, ask your GCP org admin to grant it before proceeding. Commands fail with `PERMISSION_DENIED` without the right roles.
@@ -99,7 +100,7 @@ gcloud secrets add-iam-policy-binding moengage-api-creds --member="serviceAccoun
 
 ### sa-extract-play-console (runtime SA for the Cloud Run Job)
 
-This SA is the runtime identity of the Cloud Run Job — it writes to BigQuery and reads the Play Console SA key from Secret Manager. It does NOT authenticate to the Play Console API directly (that auth uses the SA key JSON stored in the secret).
+This SA is the runtime identity of the Cloud Run Job - it writes to BigQuery and reads the Play Console SA key from Secret Manager. It does NOT authenticate to the Play Console API directly (that auth uses the SA key JSON stored in the secret).
 
 > SA was already created in Section 2. Only the IAM bindings are added here.
 
@@ -237,13 +238,13 @@ bq --project_id=$PROJECT mk --location=asia-southeast2 play_mart
 
 ## 7. Build and Push Container Images
 
-No Docker Desktop required. All builds run inside Cloud Build on GCP — nothing runs on your laptop.
+No Docker Desktop required. All builds run inside Cloud Build on GCP - nothing runs on your laptop.
 
 There are two Cloud Build config files in `cloudbuild/`:
-- `build-push.yaml` — used here (Section 7). Builds both Docker images and pushes them to Artifact Registry. Does NOT deploy or touch Cloud Run Jobs.
-- `deploy-prod.yaml` — used by the automated CI/CD trigger (handover.md Steps 4-5). Builds images AND rolls them onto the existing Cloud Run Jobs. Used after the jobs are created.
+- `build-push.yaml` - used here (Section 7). Builds both Docker images and pushes them to Artifact Registry. Does NOT deploy or touch Cloud Run Jobs.
+- `deploy-prod.yaml` - used by the automated CI/CD trigger (handover.md Steps 4-5). Builds images AND rolls them onto the existing Cloud Run Jobs. Used after the jobs are created.
 
-You use `build-push.yaml` here because the Cloud Run Jobs do not exist yet — they are created in Section 8 using these images.
+You use `build-push.yaml` here because the Cloud Run Jobs do not exist yet - they are created in Section 8 using these images.
 
 **One-time auth (allow gcloud to push to Artifact Registry):**
 ```bash
@@ -452,6 +453,45 @@ gcloud scheduler jobs create http pipeline-trigger-afternoon \
   --uri="https://workflowexecutions.googleapis.com/v1/projects/${PROJECT}/locations/asia-southeast2/workflows/pipeline/executions" \
   --message-body="{}" \
   --oauth-service-account-email=sa-scheduler@${PROJECT}.iam.gserviceaccount.com \
+  --project=$PROJECT
+```
+
+---
+
+## 11. Failure Alerting (recommended, not provisioned by default)
+
+The pipeline does not notify anyone when a run fails out of the box. A `FAILED`
+run is only visible if someone checks `gcloud workflows executions list` or the
+Console. For production you almost always want an email on failure so a broken
+pipeline does not go unnoticed for days.
+
+This is optional and left out of the base provisioning on purpose (the initial
+handover scope had no alerting). Set it up once per project when the client is
+ready. Two commands, full walkthrough including Slack/PagerDuty variants, are in
+`docs/runbook.md` section 10 ("Adding email alerting").
+
+Quick version:
+
+```bash
+# 1. notification channel (use a team distribution list, not a personal inbox)
+gcloud beta monitoring channels create \
+  --display-name="Pipeline Alerts" \
+  --type=email \
+  --channel-labels=email_address=YOUR_TEAM_EMAIL@example.com \
+  --project=$PROJECT
+
+# 2. alert policy on FAILED workflow runs (paste the channel name from step 1)
+CHANNEL="projects/$PROJECT/notificationChannels/PASTE_CHANNEL_ID_HERE"
+gcloud alpha monitoring policies create \
+  --notification-channels="$CHANNEL" \
+  --display-name="Pipeline run FAILED" \
+  --condition-display-name="Workflow pipeline finished with FAILED" \
+  --condition-filter='metric.type="workflows.googleapis.com/finished_execution_count" AND resource.type="workflows.googleapis.com/Workflow" AND resource.label.workflow_id="pipeline" AND metric.label.status="FAILED"' \
+  --condition-threshold-value=0 \
+  --condition-threshold-comparison=COMPARISON_GT \
+  --condition-threshold-duration=0s \
+  --condition-threshold-aggregation='{"alignmentPeriod":"300s","perSeriesAligner":"ALIGN_COUNT"}' \
+  --combiner=OR \
   --project=$PROJECT
 ```
 

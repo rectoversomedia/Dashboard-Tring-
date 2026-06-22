@@ -59,6 +59,8 @@ The Cloud Run Job runtime SA (`sa-extract-play-console@$PROJECT.iam.gserviceacco
 
 All metric set endpoints are POST `.../{metricSetName}:query` with a JSON body specifying `timelineSpec`, `metrics`, and `dimensions`. Results are DAILY aggregated.
 
+> **Adding another metric set:** append an entry to `METRIC_SETS` in `ingestion/src/tring_ingest/sources/play_console/endpoints.py`, then rebuild the image. Step by step in `docs/adding-endpoints.md` (section B).
+
 ### raw_crash_rate
 
 - **Endpoint:** `/apps/com.pegadaiandigital/crashRateMetricSet:query`
