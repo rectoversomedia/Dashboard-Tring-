@@ -242,7 +242,7 @@ Expected: `state: SUCCEEDED`. Extract jobs run in parallel (extract-appsflyer, e
 
 > **Schedule assumption:** The 08:00 and 20:00 WIB schedule is a default based on the TSD (twice daily to catch late-arriving data). The client has not confirmed a final schedule. To change: `gcloud scheduler jobs update http pipeline-trigger-morning --schedule="0 H * * *" --location=asia-southeast2 --project=PROJECT` (and same for `pipeline-trigger-afternoon`). See runbook.md for more.
 
-> **Alerting is not provisioned.** Failures surface as a `FAILED` Workflow execution, visible via `gcloud workflows executions list` or the Console. Email/Slack alerting on failure is out of scope for the initial handover  -  if the client wants it, add a Cloud Monitoring alert policy on the `workflows.googleapis.com/finished_execution_count` metric (filtered to `status=FAILED`) with a notification channel. See runbook.md section 8.
+> **Alerting is not provisioned by default.** Failures surface as a `FAILED` Workflow execution, visible via `gcloud workflows executions list` or the Console - but nobody is notified automatically until you set it up. For production you almost certainly want email alerting so a failed run does not go unnoticed for days. Runbook.md section 10 has two ready-to-run `gcloud` commands (create a notification channel, then an alert policy on the `workflows.googleapis.com/finished_execution_count` metric filtered to `status=FAILED`). Allow about 10 minutes to set up.
 
 ---
 
@@ -252,7 +252,7 @@ See `docs/runbook.md` for:
 - Manual pipeline trigger
 - Backfilling historical data
 - Rotating API tokens
-- Checking for failures (no alerting provisioned)
+- Checking for failures and adding email alerting (section 10)
 - Adding a new source
 
 ---

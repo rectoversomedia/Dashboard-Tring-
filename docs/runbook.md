@@ -273,15 +273,69 @@ AppsFlyer limits: `in_app_events` 12 calls/day/app, `installs` 24/day/app. When 
 
 ---
 
-## 10. Checking for failures (no alerting provisioned)
+## 10. Checking for failures and adding alerting
 
-There is no automated alert. Failures surface as a `FAILED` Workflow execution. Check periodically, or after a scheduled run:
+By default there is no automated alert (not provisioned in the initial
+handover). Failures surface as a `FAILED` Workflow execution. Check manually as
+below, or set up email alerting (next sub-section) so failures notify you
+automatically.
+
+Check periodically, or after a scheduled run:
 
 1. List executions: `gcloud workflows executions list pipeline --location=asia-southeast2 --project=$PROJECT --limit=5`
 2. A `FAILED` state names which step failed in its error message  -  describe it: `gcloud workflows executions describe EXECUTION_ID --workflow=pipeline --location=asia-southeast2 --project=$PROJECT`
 3. Check Cloud Logging for that job (sections 2-3 above)
 
-> **To add email/Slack alerting (optional):** create a Cloud Monitoring alert policy on metric `workflows.googleapis.com/finished_execution_count` filtered to `status="FAILED"`, attached to a notification channel (email/Slack/PagerDuty). This was left out of the initial handover scope.
+### Adding email alerting (recommended for production)
+
+Alerting is not provisioned in the initial handover, so a failed run is only
+visible if someone checks manually. For production you usually want an email
+when the pipeline fails. Set it up once per GCP project with two commands.
+
+The alert fires on the Cloud Monitoring metric
+`workflows.googleapis.com/finished_execution_count` filtered to
+`status="FAILED"`, so it covers any failure in any branch (the workflow ends in
+`FAILED` whenever an extract or the dbt step fails).
+
+```bash
+# 1. Create an email notification channel. Use a team distribution list, not a
+#    personal inbox, so alerts survive staff changes.
+gcloud beta monitoring channels create \
+  --display-name="Pipeline Alerts" \
+  --type=email \
+  --channel-labels=email_address=YOUR_TEAM_EMAIL@example.com \
+  --project=$PROJECT
+
+# Copy the channel name from the output. It looks like:
+#   projects/$PROJECT/notificationChannels/1234567890123456789
+```
+
+```bash
+# 2. Create the alert policy, pointing at the channel name from step 1.
+CHANNEL="projects/$PROJECT/notificationChannels/PASTE_CHANNEL_ID_HERE"
+
+gcloud alpha monitoring policies create \
+  --notification-channels="$CHANNEL" \
+  --display-name="Pipeline run FAILED" \
+  --condition-display-name="Workflow pipeline finished with FAILED" \
+  --condition-filter='metric.type="workflows.googleapis.com/finished_execution_count" AND resource.type="workflows.googleapis.com/Workflow" AND resource.label.workflow_id="pipeline" AND metric.label.status="FAILED"' \
+  --condition-threshold-value=0 \
+  --condition-threshold-comparison=COMPARISON_GT \
+  --condition-threshold-duration=0s \
+  --condition-threshold-aggregation='{"alignmentPeriod":"300s","perSeriesAligner":"ALIGN_COUNT"}' \
+  --combiner=OR \
+  --project=$PROJECT
+```
+
+After this, any `FAILED` run sends an email within a few minutes. To verify, let
+a run fail on purpose (for example point an extract at an invalid date) or wait
+for the next real failure.
+
+> For Slack or PagerDuty instead of email: create the notification channel with
+> `--type=slack` or `--type=pagerduty` (each needs its own setup in the GCP
+> Console first to authorize the integration), then reuse the same alert policy
+> command with that channel name. You can attach more than one channel by
+> repeating `--notification-channels`.
 
 Common causes:
 - **HTTP 401 (AppsFlyer)**: Token expired → rotate token (Section 5)
