@@ -28,8 +28,8 @@ TO ?= $(shell date -u +%Y-%m-%d)
 	build-ingestion build-dbt \
 	push-ingestion push-dbt \
 	tf-init tf-plan tf-apply \
-	create-appsflyer create-dbt \
-	deploy-appsflyer deploy-dbt deploy-workflow deploy-scheduler \
+	create-appsflyer create-moengage create-play-console create-dbt \
+	deploy-appsflyer deploy-moengage deploy-play-console deploy-dbt deploy-workflow deploy-scheduler \
 	run-appsflyer-local deploy
 
 # -- Dev setup -----------------------------------------------------------------
@@ -96,6 +96,31 @@ create-appsflyer: require-project
 		--command python \
 		--args "-m,tring_ingest,--source,appsflyer"
 
+# extract-moengage: secret value (WORKSPACE_ID:API_KEY) added out of band, see gcp-setup.md.
+create-moengage: require-project
+	gcloud run jobs create extract-moengage \
+		--image $(IMAGE_INGESTION):latest \
+		--region $(REGION) \
+		--project $(PROJECT) \
+		--set-env-vars GCP_PROJECT=$(PROJECT),BQ_DATASET_RAW_MOENGAGE=moengage_raw,REGION=$(REGION) \
+		--set-secrets MOENGAGE_API_CREDS=moengage-api-creds:latest \
+		--service-account sa-extract-moengage@$(PROJECT).iam.gserviceaccount.com \
+		--command python \
+		--args "-m,tring_ingest,--source,moengage"
+
+# extract-play-console: PLAY_CONSOLE_SECRET_NAME tells config.py which Secret Manager secret to fetch
+# the SA key JSON from. The code reads this as a secret *name*, then calls Secret Manager API at runtime.
+# SA key JSON comes from pgd-prd-digital-rating-tring. See gcp-setup.md / data-catalog-play-console.md.
+create-play-console: require-project
+	gcloud run jobs create extract-play-console \
+		--image $(IMAGE_INGESTION):latest \
+		--region $(REGION) \
+		--project $(PROJECT) \
+		--set-env-vars GCP_PROJECT=$(PROJECT),BQ_DATASET_RAW_PLAY_CONSOLE=play_raw,REGION=$(REGION),PLAY_CONSOLE_SECRET_NAME=play-console-sa-key \
+		--service-account sa-extract-play-console@$(PROJECT).iam.gserviceaccount.com \
+		--command python \
+		--args "-m,tring_ingest,--source,play_console"
+
 # dbt-transform: NO --command/--args. The Dockerfile ENTRYPOINT runs
 # `dbt build --profiles-dir /app --target prod`. Overriding it here would break dbt.
 create-dbt: require-project
@@ -108,6 +133,18 @@ create-dbt: require-project
 
 deploy-appsflyer: require-project
 	gcloud run jobs update extract-appsflyer \
+		--image $(IMAGE_INGESTION):latest \
+		--region $(REGION) \
+		--project $(PROJECT)
+
+deploy-moengage: require-project
+	gcloud run jobs update extract-moengage \
+		--image $(IMAGE_INGESTION):latest \
+		--region $(REGION) \
+		--project $(PROJECT)
+
+deploy-play-console: require-project
+	gcloud run jobs update extract-play-console \
 		--image $(IMAGE_INGESTION):latest \
 		--region $(REGION) \
 		--project $(PROJECT)
@@ -157,5 +194,5 @@ run-appsflyer-local: require-project
 # Rolls new images onto EXISTING jobs. The jobs/workflow/scheduler are created once
 # via the create-* targets (or docs/gcp-setup.md steps 8-10). No Terraform.
 
-deploy: require-project push-ingestion push-dbt deploy-appsflyer deploy-dbt deploy-workflow deploy-scheduler
+deploy: require-project push-ingestion push-dbt deploy-appsflyer deploy-moengage deploy-play-console deploy-dbt deploy-workflow deploy-scheduler
 	@echo "Deploy to $(ENV) complete."

@@ -129,8 +129,22 @@ Reference date for row counts: **2026-06-13 to 2026-06-14** (2-day window, valid
 - **Params:** `from`, `to`, `timezone`
 - **BQ table:** `appsflyer_raw.raw_in_app_events`
 - **Volume:** Android ~100,000-200,000+/day, iOS ~40,000-85,000/day
-- **81 source columns:** Same schema as `raw_installs`  -  `Event Name` contains the in-app event name (e.g. `SplashScreen_Loading`, `Login_PreLogin_Masuk`, `BeliTE_TransaksiSukses`)
+- **81 source columns:** Same schema as `raw_installs`  -  `Event Name` contains the in-app event name
 - **Key column:** `Event Name`  -  used by dbt seed `appsflyer_event_mapping.csv` to categorize into `open_app`, `login`, `purchase`, `registrations`
+
+**Event name mapping (from `transform/seeds/appsflyer_event_mapping.csv`):**
+
+| Event Name | Category |
+|---|---|
+| `Onboarding_BuatPIN_Berhasil` | `registrations` |
+| `Login_PreLogin_Masuk` | `login` |
+| `Login_BottomSheet_Masuk` | `login` |
+| `BeliTE_TransaksiSukses` | `purchase` |
+| `BayarGadai_TransaksiSukses` | `purchase` |
+| `BayarAngsuran_TransaksiSukses` | `purchase` |
+| `SplashScreen_Loading` | `open_app` |
+
+> Events not in this mapping land in the raw table but are excluded from mart aggregations. The `event_category` dbt test fires a `WARN` (not error) for unmapped events - new event names from the client should be added to the seed file.
 
 ---
 

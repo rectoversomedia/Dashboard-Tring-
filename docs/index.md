@@ -17,19 +17,17 @@ If you are new to this project, read in this order:
 
 ## The big picture in one paragraph
 
-Twice a day, a timer (Cloud Scheduler) starts an orchestrator (Cloud Workflows). The orchestrator runs two extract jobs **in parallel**: one downloads data from the AppsFlyer API and one from MoEngage. Both save raw data into BigQuery. Once both complete, a **transform** job (dbt) cleans and reshapes that raw data into analytics-ready tables. Those final tables feed a Looker Studio dashboard. That is the whole pipeline.
+Twice a day, a timer (Cloud Scheduler) starts an orchestrator (Cloud Workflows). The orchestrator runs three extract jobs **in parallel**: one downloads data from the AppsFlyer API, one from MoEngage, and one from Google Play Console. All three save raw data into BigQuery. Once all three complete, a **transform** job (dbt) cleans and reshapes that raw data into analytics-ready tables. Those final tables feed a Looker Studio dashboard. That is the whole pipeline.
 
 ```
 Cloud Scheduler (timer, 2x/day)
    -> Cloud Workflows (orchestrator)
-        -> [parallel] extract-appsflyer job      (download AppsFlyer API -> BigQuery raw)
-        -> [parallel] extract-moengage job       (download MoEngage API  -> BigQuery raw)
-        -> [parallel] extract-play-console job   (download Play Console API -> BigQuery raw)
-        -> dbt-transform job                     (raw -> staging -> mart tables)
+        -> [parallel] extract-appsflyer job      (download AppsFlyer API     -> BigQuery raw)
+        -> [parallel] extract-moengage job       (download MoEngage API      -> BigQuery raw)
+        -> [parallel] extract-play-console job   (download Play Console API  -> BigQuery raw)
+        -> dbt-transform job  (runs only after all three extracts succeed)  (raw -> staging -> mart tables)
               -> Looker Studio dashboard reads the mart tables
 ```
-
-> Note: `extract-play-console` is in the diagram above but not yet wired into `pipeline.yaml` - it is the next step after GCP infra is provisioned. The current pipeline runs AppsFlyer + MoEngage in parallel.
 
 ---
 

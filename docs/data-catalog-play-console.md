@@ -1,6 +1,6 @@
 # Data Catalog: Play Console Raw Layer
 
-Status: **ingestion code DONE, GCP infra DONE (2026-06-22), dbt models and pipeline.yaml PENDING**.
+Status: **FULLY DONE (2026-06-22)** - ingestion code, GCP infra, dbt models, pipeline.yaml, E2E all verified. Raw: 3,580 rows across 7 tables. dbt: PASS=140 WARN=0 ERROR=0.
 
 ---
 
@@ -8,13 +8,13 @@ Status: **ingestion code DONE, GCP infra DONE (2026-06-22), dbt models and pipel
 
 | Data Type | BQ Table | Source API | Columns |
 |---|---|---|---|
-| Crash rate | `play_raw.raw_crash_rate` | Play Developer Reporting API | 3 metrics + CI bounds + dimensions + 8 meta |
-| ANR rate | `play_raw.raw_anr_rate` | Play Developer Reporting API | 3 metrics + CI bounds + dimensions + 8 meta |
-| Stuck background wakelock rate | `play_raw.raw_stuck_bg_wakelock_rate` | Play Developer Reporting API | 3 metrics + CI bounds + dimensions + 8 meta |
-| Excessive wakeup rate | `play_raw.raw_excessive_wakeup_rate` | Play Developer Reporting API | 3 metrics + CI bounds + dimensions + 8 meta |
-| Error count | `play_raw.raw_error_count` | Play Developer Reporting API | 2 metrics + dimensions + 8 meta |
-| Slow start rate | `play_raw.raw_slow_start_rate` | Play Developer Reporting API | 3 metrics + CI bounds + dimensions + 8 meta |
-| Reviews | `play_raw.raw_reviews` | Android Publisher API | 17 source + 8 meta |
+| Crash rate | `play_raw.raw_crash_rate` | Play Developer Reporting API | 3 metrics + CI bounds + versionCode + 8 meta |
+| ANR rate | `play_raw.raw_anr_rate` | Play Developer Reporting API | 3 metrics + CI bounds + versionCode + 8 meta |
+| Stuck background wakelock rate | `play_raw.raw_stuck_bg_wakelock_rate` | Play Developer Reporting API | 3 metrics + versionCode + 8 meta (no CI) |
+| Excessive wakeup rate | `play_raw.raw_excessive_wakeup_rate` | Play Developer Reporting API | 3 metrics + versionCode + 8 meta (no CI) |
+| Error count | `play_raw.raw_error_count` | Play Developer Reporting API | 2 metrics + reportType + versionCode + 8 meta |
+| Slow start rate | `play_raw.raw_slow_start_rate` | Play Developer Reporting API | 3 metrics + versionCode + startType + 8 meta (no CI) |
+| Reviews | `play_raw.raw_reviews` | Android Publisher API | 16 source + 8 meta |
 
 ---
 
@@ -37,16 +37,21 @@ The service account needs these OAuth scopes (set in `client.py`):
 
 ### Service account used
 
-This pipeline uses an existing SA from the client's production GCP project, not a new SA created in `hypefast-data-staging`. The SA already has Play Console access granted.
+Two GCP projects are involved here, do not mix them up:
+
+1. **The data pipeline project** (`$PROJECT`, the one you deploy everything to). It holds the `play-console-sa-key` secret and the runtime SA `sa-extract-play-console`.
+2. **The Play Console source project** (`pgd-prd-digital-rating-tring`). It owns the SA `dashboard-monitoring-aiinsight` that already has Play Console API access. You do NOT create a new SA for Play Console access; you reuse this existing one by storing its key JSON in the secret.
 
 | Field | Value |
 |---|---|
-| SA email | `dashboard-monitoring-aiinsight@pgd-prd-digital-rating-tring.iam.gserviceaccount.com` |
-| GCP project | `pgd-prd-digital-rating-tring` (client prod) |
-| Secret name | `play-console-sa-key` (in `hypefast-data-staging`) |
-| Key file | `pgd-prd-digital-rating-tring-57c6de79ff3b.json` (gitignored, repo root) |
+| Play Console SA email | `dashboard-monitoring-aiinsight@pgd-prd-digital-rating-tring.iam.gserviceaccount.com` |
+| Project that owns that SA | `pgd-prd-digital-rating-tring` (the Play Console source project) |
+| Secret name (in your pipeline project) | `play-console-sa-key` |
+| Key file (gitignored, kept only at repo root, never committed) | the SA key JSON downloaded from the source project |
 
-The Cloud Run Job runtime SA (`sa-extract-play-console@hypefast-data-staging`) only needs BQ + Secret Manager access. The Play Console API auth is handled by the SA key JSON loaded from Secret Manager at runtime.
+The Cloud Run Job runtime SA (`sa-extract-play-console@$PROJECT.iam.gserviceaccount.com`) only needs BQ + Secret Manager access in your pipeline project. The Play Console API auth is handled separately, by the SA key JSON loaded from Secret Manager at runtime.
+
+> **How to obtain the key JSON (do this before creating the secret):** You need a key for the `dashboard-monitoring-aiinsight` SA in `pgd-prd-digital-rating-tring`. If you have IAM access to that project: GCP Console > IAM & Admin > Service Accounts > select the SA > Keys > Add Key > Create new key > JSON, then download it. If you do NOT have access to that project (likely, it is a separate production project owned by another team), ask whoever owns `pgd-prd-digital-rating-tring` to generate the JSON key and send it to you over a secure channel (a secret-sharing tool, never email or chat). The SA must already have Play Console access granted in the Google Play Console; that grant is one-time and is assumed already done.
 
 ---
 
@@ -79,7 +84,7 @@ All metric set endpoints are POST `.../{metricSetName}:query` with a JSON body s
 - **Dimensions:** `versionCode`
 - **Metrics:** `anrRate`, `anrRate7dUserWeighted`, `anrRate28dUserWeighted`
 
-Same schema as `raw_crash_rate` with `anr*` column names.
+Same structure as `raw_crash_rate` but with `anr*` column names. **Includes CI bounds** (`anrRate_ci_lower`, `anrRate_ci_upper`); the ANR rate metric set returns confidence interval data, same as crash rate.
 
 ### raw_stuck_bg_wakelock_rate
 
@@ -87,7 +92,7 @@ Same schema as `raw_crash_rate` with `anr*` column names.
 - **Dimensions:** `versionCode`
 - **Metrics:** `stuckBgWakelockRate`, `stuckBgWakelockRate7dUserWeighted`, `stuckBgWakelockRate28dUserWeighted`
 
-Same schema as `raw_crash_rate` with `stuckBgWakelockRate*` column names.
+Same structure as `raw_anr_rate` with `stuckBgWakelockRate*` column names. **No CI bounds.**
 
 ### raw_excessive_wakeup_rate
 
@@ -95,7 +100,7 @@ Same schema as `raw_crash_rate` with `stuckBgWakelockRate*` column names.
 - **Dimensions:** `versionCode`
 - **Metrics:** `excessiveWakeupRate`, `excessiveWakeupRate7dUserWeighted`, `excessiveWakeupRate28dUserWeighted`
 
-Same schema as `raw_crash_rate` with `excessiveWakeupRate*` column names.
+Same structure as `raw_anr_rate` with `excessiveWakeupRate*` column names. **No CI bounds.**
 
 ### raw_error_count
 
@@ -133,9 +138,8 @@ No confidence interval columns (this metric set does not return CI bounds).
 | slowStartRate | STRING (decimal) | Fraction of sessions with slow start time |
 | slowStartRate7dUserWeighted | STRING (decimal) | 7-day user-weighted rolling average |
 | slowStartRate28dUserWeighted | STRING (decimal) | 28-day user-weighted rolling average |
-| slowStartRate_ci_lower | STRING (decimal) | Lower bound of 95% confidence interval |
-| slowStartRate_ci_upper | STRING (decimal) | Upper bound of 95% confidence interval |
-| (same _ci_lower/_ci_upper for 7d and 28d variants) | | |
+
+> No CI bounds for slow start rate (API does not return confidence interval data for this metric set, verified live 2026-06-22).
 
 ---
 
@@ -184,16 +188,19 @@ All raw tables include 8 standard metadata columns appended by the loader:
 
 ---
 
-## GCP Infra (DONE - provisioned 2026-06-22, hypefast-data-staging)
+## GCP Infra (DONE - provisioned and E2E verified 2026-06-22 in the consultant dev project; reproduce in the client project with the commands below)
 
 | Resource | Status |
 |---|---|
 | SA `sa-extract-play-console` (runtime) | DONE |
 | IAM: bigquery.dataEditor + jobUser | DONE |
-| Secret `play-console-sa-key` (client prod SA key JSON) | DONE (version 1) |
+| Secret `play-console-sa-key` (client prod SA key JSON, version 2 active) | DONE |
 | IAM: secretmanager.secretAccessor on play-console-sa-key | DONE |
 | BQ datasets: play_raw, play_staging, play_mart | DONE |
 | Cloud Run Job: extract-play-console | DONE |
+| dbt models (7 staging + 2 mart) | DONE |
+| pipeline.yaml (3 parallel branches) | DONE |
+| Workflow deployed (revision 000012-e43) | DONE |
 
 Commands used (reference for reproducing in client prod):
 
@@ -243,7 +250,40 @@ gcloud run jobs create extract-play-console \
   --project=$PROJECT
 ```
 
-Next step: add `extract-play-console` as a parallel branch in `orchestration/workflows/pipeline.yaml`.
+E2E verified 2026-06-22: 3,580 raw rows across 7 tables. dbt PASS=140 WARN=0 ERROR=0.
+
+---
+
+## dbt Models
+
+### Staging (play_staging dataset)
+
+Views. Dedup by natural key on latest `_ingested_at`. All STRING fields cast to typed columns.
+
+| Model | Grain | Key columns |
+|---|---|---|
+| `stg_play_console_crash_rate` | date x version_code | crash_rate, crash_rate_7d, crash_rate_28d, crash_rate_ci_lower/upper |
+| `stg_play_console_anr_rate` | date x version_code | anr_rate, anr_rate_7d, anr_rate_28d, anr_rate_ci_lower/upper |
+| `stg_play_console_stuck_bg_wakelock_rate` | date x version_code | stuck_bg_wakelock_rate, _7d, _28d |
+| `stg_play_console_excessive_wakeup_rate` | date x version_code | excessive_wakeup_rate, _7d, _28d |
+| `stg_play_console_error_count` | date x report_type x version_code | error_report_count, distinct_users |
+| `stg_play_console_slow_start_rate` | date x version_code x start_type | slow_start_rate, _7d, _28d |
+| `stg_play_console_reviews` | review_id | star_rating, last_modified_at_ts, developer_reply_text, review_text |
+
+> Only `stg_play_console_crash_rate` and `stg_play_console_anr_rate` have CI columns. The other metric sets (stuck bg wakelock, excessive wakeup, error count, slow start) do not return CI bounds (verified live against the API and the raw BQ table schemas 2026-06-22).
+
+> `has_developer_reply` is a mart-only computed column (`mart_play_console_reviews`), not in staging. Staging passes through `developer_reply_text` as-is; the mart derives the flag from it.
+
+> `stg_play_console_reviews` does not include `_extract_from`/`_extract_to` meta columns. Reviews are not date-scoped (the API returns all reviews regardless of date range), so these columns have no meaningful value for reviews and are intentionally omitted.
+
+### Mart (play_mart dataset)
+
+Tables. Full refresh each run. Partitioned + clustered for query efficiency.
+
+| Model | Grain | Partition | Description |
+|---|---|---|---|
+| `mart_play_console_app_health` | date x version_code | date | FULL OUTER JOIN of crash/ANR/wakelock/wakeup rates in one wide table. CI bounds included for crash rate and ANR rate. |
+| `mart_play_console_reviews` | review_id | review_date | All reviews with `has_developer_reply` and `is_negative_review` flags |
 
 ---
 
@@ -252,5 +292,5 @@ Next step: add `extract-play-console` as a parallel branch in `orchestration/wor
 - **Metric set data lag:** Play Developer Reporting API data lags by ~2-3 days. Querying today's data returns nothing; always query with a date_to at least 3 days in the past for complete data.
 - **Reviews not date-scoped:** The reviews endpoint returns all reviews regardless of date range. Re-running produces duplicates in raw; staging deduplicates by `review_id` and `last_modified_seconds`.
 - **errorCountMetricSet requires reportType dimension:** Omitting `reportType` returns HTTP 400. This is an API constraint, not optional.
-- **Confidence intervals absent for some metrics:** `errorCountMetricSet` does not return CI bounds. Other metric sets do. The flatten function handles both cases gracefully.
+- **Confidence intervals only for crash rate and ANR rate:** Only `crashRateMetricSet` and `anrRateMetricSet` return CI bounds in practice (verified live and against the raw BQ table schemas 2026-06-22). Stuck bg wakelock, excessive wakeup, and slow start rate do NOT return CI columns. `errorCountMetricSet` also has no CI. The ingestion code handles both cases (only writes CI columns when the API returns them), so raw table schemas differ per metric set.
 - **SA key rotation:** Unlike API tokens, the Play Console SA key is a full JSON file. Follow the rotation procedure in `docs/runbook.md` section 7 carefully (generate new key, add to Secret Manager, delete old key from GCP IAM).

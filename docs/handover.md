@@ -190,7 +190,9 @@ gcloud builds submit . \
 This command uploads the code to Cloud Build and runs the deploy script. It will:
 1. Build the ingestion container image and push it to Artifact Registry
 2. Build the dbt container image and push it to Artifact Registry
-3. Update the existing Cloud Run Jobs (`extract-appsflyer`, `extract-moengage`, and `dbt-transform`) to use the new images
+3. Update the existing Cloud Run Jobs (`extract-appsflyer`, `extract-moengage`, `extract-play-console`, and `dbt-transform`) to use the new images
+
+> **Prerequisite:** this build runs `gcloud run jobs update`, which only works on jobs that already exist. The jobs are created once in `gcp-setup.md` section 8 (or via `make create-appsflyer create-moengage create-play-console create-dbt`). If you run this build before creating the jobs, it fails with `NOT_FOUND`; go back and create them first.
 
 **Watch the build progress:**
 

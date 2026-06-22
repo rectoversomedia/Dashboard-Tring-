@@ -1,14 +1,15 @@
 # Dashboard Monitoring & AI Insight  -  Data Pipeline
 
-Data pipeline for multi-source mobile app analytics. Sources: AppsFlyer, MoEngage, Google Play Console, App Store Connect. Target: BigQuery + Looker Studio.
+Data pipeline for multi-source mobile app analytics. Live sources: AppsFlyer, MoEngage, Google Play Console. App Store Connect is scaffolded for the future but not in scope yet. Target: BigQuery + Looker Studio.
 
 ## Architecture
 
 ```
   -> Cloud Workflows
-      -> [parallel] Cloud Run Job (extract-appsflyer  -  8 pulls: 4 endpoints x 2 platforms)
-      -> [parallel] Cloud Run Job (extract-moengage   -  2 endpoints: campaign search + stats)
-      -> Cloud Run Job (dbt transform)
+      -> [parallel] Cloud Run Job (extract-appsflyer     -  8 pulls: 4 endpoints x 2 platforms)
+      -> [parallel] Cloud Run Job (extract-moengage      -  2 endpoints: campaign search + stats)
+      -> [parallel] Cloud Run Job (extract-play-console  -  6 metric sets + reviews)
+      -> Cloud Run Job (dbt transform)   (runs after all three extracts succeed)
   -> BigQuery (raw -> staging/mart)
   -> Looker Studio (mart tables)
 ```
@@ -19,8 +20,8 @@ Data pipeline for multi-source mobile app analytics. Sources: AppsFlyer, MoEngag
 |---|---|---|---|---|---|
 | AppsFlyer | DONE | 12/12 | DONE | DONE | DONE |
 | MoEngage | DONE | 12/12 | DONE | DONE | DONE |
-| Play Console | scaffold only | - | pending | pending | pending |
-| App Store Connect | scaffold only | - | pending | pending | pending |
+| Play Console | DONE | 16/16 | DONE (7 staging + 2 mart) | DONE | DONE |
+| App Store Connect | scaffold only (future, not in scope) | - | - | - | - |
 
 Region: `asia-southeast2` (Jakarta). Environments: `dev` (consultant GCP project), `prod` (client GCP  -  deployed via GitLab + VPN).
 
@@ -110,6 +111,7 @@ See [docs/runbook.md](docs/runbook.md) for full ops procedures: manual triggers,
 
 - **AppsFlyer:** [docs/data-catalog-appsflyer.md](docs/data-catalog-appsflyer.md) - endpoint reference, table schemas, column definitions, row volumes, known issues.
 - **MoEngage:** [docs/data-catalog-moengage.md](docs/data-catalog-moengage.md) - endpoint reference, column definitions, API limits (limit=15, max 10 IDs/request, 30d window), known metric behaviors (CTR scale, ALL_PLATFORMS, impression as open proxy).
+- **Play Console:** [docs/data-catalog-play-console.md](docs/data-catalog-play-console.md) - metric sets, review fields, API endpoints, dbt models (7 staging + 2 mart), GCP infra and the two-project SA key setup.
 
 ## Adding a New Source
 

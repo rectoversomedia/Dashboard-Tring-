@@ -8,8 +8,8 @@ Reference date for row counts: **2026-06-22** (validated from E2E run: 599 campa
 
 | Endpoint | BQ Table | Rows (one-time full pull) | Columns |
 |---|---|---|---|
-| /campaigns/search | `moengage_raw.raw_campaigns` | 599 | 9 source + 8 meta |
-| /campaign-stats | `moengage_raw.raw_campaign_stats` | 4712 | 15 source + 8 meta |
+| `/core-services/v1/campaigns/search` (POST) | `moengage_raw.raw_campaigns` | 599 | 9 source + 8 meta |
+| `/core-services/v1/campaign-stats` (POST) | `moengage_raw.raw_campaign_stats` | 4712 | 15 source + 8 meta |
 
 > `raw_campaign_stats` rows = campaigns x platforms x variations x locale x date windows. 599 campaigns x ~8 platforms/variations average = 4712.
 
@@ -30,12 +30,12 @@ Reference date for row counts: **2026-06-22** (validated from E2E run: 599 campa
 
 ### 1. /campaigns/search
 
-- **URL:** `/v1/campaigns/search`
-- **Method:** GET
-- **Params:** `limit` (max 15), `offset` (pagination)
+- **URL:** `/core-services/v1/campaigns/search`
+- **Method:** POST (body: `request_id`, `campaign_fields`, `page`, `limit`)
+- **Pagination:** page-based via `page` field in request body (not query param)
 - **BQ table:** `moengage_raw.raw_campaigns`
 - **Response shape:** bare `list[dict]` (NOT wrapped - no outer key)
-- **Pagination:** offset-based. Total 599 campaigns; 40 pages at limit=15.
+- **Pagination:** page-based. Total 599 campaigns; 40 pages at limit=15.
 - **Rate limit:** no documented per-minute limit; use small sleep between pages to be safe
 
 **Source columns (9):**
@@ -58,9 +58,9 @@ Reference date for row counts: **2026-06-22** (validated from E2E run: 599 campa
 
 ### 2. /campaign-stats
 
-- **URL:** `/v1/campaign-stats`
+- **URL:** `/core-services/v1/campaign-stats`
 - **Method:** POST
-- **Body:** `{"campaign_ids": [...], "from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}`
+- **Body:** `{"campaign_ids": [...], "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "attribution_type": "...", "metric_type": "...", "request_id": "..."}`
 - **BQ table:** `moengage_raw.raw_campaign_stats`
 - **Response shape:** wrapped dict with `stats_summary` key
 - **API constraints:**
@@ -185,3 +185,4 @@ The original dashboard requirement defines five metric groups (A-E) for MoEngage
 | conversion_goal_stats empty | Most campaigns have no conversion goal. `'{}'` in raw = null in mart. |
 | _app_id and _platform empty | MoEngage is workspace-level; platform comes from the `platform` response field, not meta columns. |
 | Secret format | `moengage-api-creds` holds `WORKSPACE_ID:API_KEY` as one colon-delimited string. |
+| Attribution and metric type defaults | The campaign-stats pull defaults to `MOENGAGE_ATTRIBUTION_TYPE=VIEW_THROUGH` and `MOENGAGE_METRIC_TYPE=TOTAL` (set in `config.py`). These were confirmed against a live test but the client should confirm the final values before go-live. To change without a code change, set the env vars on the `extract-moengage` Cloud Run Job: `gcloud run jobs update extract-moengage --update-env-vars="MOENGAGE_ATTRIBUTION_TYPE=...,MOENGAGE_METRIC_TYPE=..." --region=asia-southeast2 --project=$PROJECT`. |

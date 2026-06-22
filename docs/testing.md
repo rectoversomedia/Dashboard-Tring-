@@ -64,16 +64,48 @@ What it does: exits with error if any file would be reformatted. Used in CI to b
 uv run pytest tests/ -v
 ```
 
-What it does: runs all test cases in `tests/`. The `-v` flag shows each test name and pass/fail individually.
+What it does: runs all test cases in `tests/`. The `-v` flag shows each test name and pass/fail individually. Current suite: 40 tests total (12 AppsFlyer + 12 MoEngage + 16 Play Console), all PASS.
 
 ### Test cases covered
 
-| Test class | What it tests |
+**AppsFlyer (`test_appsflyer_extract.py`) - 12 tests:**
+
+| Test class | Tests | What it tests |
+|---|---|---|
+| `TestEndpoints` | 5 | Endpoint count = 4, correct names, correct BQ table names, timezone param present, geo grouping in master-agg |
+| `TestBqLoader` | 4 | Empty CSV returns 0 rows, all metadata columns stamped on rows, schema drift flag set when columns differ, schema flag empty when columns match |
+| `TestExtractRun` | 2 | 8 HTTP pulls fired (4 endpoints x 2 app IDs), raises error when any pull fails |
+| `TestHttpRetry` | 1 | Retryable HTTP status triggers retry path |
+
+**MoEngage (`test_moengage_extract.py`) - 12 tests:**
+
+| Test class | Tests | What it tests |
+|---|---|---|
+| `TestStatsChunking` | 5 | Date range under/at 30 days is one chunk, 31 days splits in two, chunks cover the full range contiguously, attribution and metric type passed through |
+| `TestFlattenStats` | 3 | Single platform, two platforms, and empty platforms each flatten correctly |
+| `TestExtractRun` | 3 | Search runs before stats, raises on a stats chunk failure, skips stats when there are no campaigns |
+| `TestMoEngageClient` | 1 | Auth header set correctly |
+
+**Play Console (`test_play_console_extract.py`) - 16 tests:**
+
+| Test | What it tests |
 |---|---|
-| `TestEndpoints` | Endpoint count = 4, correct names, correct BQ table names, timezone param present, geo grouping in master-agg |
-| `TestBqLoader` | Empty CSV returns 0 rows, all metadata columns stamped on rows, schema drift flag set when columns differ, schema flag empty when columns match |
-| `TestExtractRun` | 8 HTTP pulls fired (4 endpoints x 2 app IDs), raises error when any pull fails |
-| `TestHttpRetry` | HTTP 503 triggers retry, raises after 3 attempts |
+| `test_date_str_to_dict` | `'2026-06-01'` correctly converts to `{year:2026, month:6, day:1}` |
+| `test_date_str_to_dict_zero_pad` | Month/day zero-padded correctly in date string |
+| `test_flatten_reporting_row_basic` | Metric values + date + dimension extracted from API response |
+| `test_flatten_reporting_row_confidence_interval` | CI bounds written when API returns them |
+| `test_flatten_reporting_row_no_ci` | Row without CI bounds produces no `_ci_lower`/`_ci_upper` keys |
+| `test_flatten_reporting_row_multi_dimension` | Multiple dimensions (reportType + versionCode) both extracted |
+| `test_flatten_review_basic` | All review fields extracted, empty developer reply handled |
+| `test_flatten_review_with_reply` | Developer reply text and timestamp extracted |
+| `test_flatten_review_star_rating` | Star rating cast to string correctly |
+| `test_pull_metric_set_returns_flattened` | `_pull_metric_set` calls API and returns flattened rows |
+| `test_pull_metric_set_empty_response` | Empty API response returns empty list |
+| `test_pull_all_reviews_single_page` | Single page of reviews returned correctly |
+| `test_pull_all_reviews_pagination` | `nextPageToken` triggers second page call |
+| `test_pull_all_reviews_empty` | Empty review list returns empty list |
+| `test_run_calls_all_metric_sets_and_reviews` | `run()` fires all 6 metric sets + reviews pull (7 total) |
+| `test_run_collects_errors_raises_at_end` | Failed pulls collected; `RuntimeError` raised at end with all failures |
 
 All tests are mocked  -  no real HTTP calls, no real BigQuery connection needed.
 
@@ -141,9 +173,10 @@ These run against a real GCP dev project. Only run after local tests pass.
 
 ### Run the extractor locally against dev BQ
 
+Run this from the repo root (the Makefile target does its own `cd ingestion`, so do not cd in first):
+
 ```bash
-cd ingestion
-make run-appsflyer-local FROM=2026-06-13 TO=2026-06-14
+make run-appsflyer-local PROJECT=your-dev-project FROM=2026-06-13 TO=2026-06-14
 ```
 
 What it does: calls the real AppsFlyer API, loads rows into `appsflyer_raw` in the dev BigQuery project. Requires `gcloud auth application-default login` and the `appsflyer-api-token` secret to exist in Secret Manager.
