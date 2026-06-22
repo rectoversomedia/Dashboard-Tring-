@@ -230,6 +230,35 @@ gcloud secrets versions disable OLD_VERSION_NUMBER --secret=play-console-sa-key 
 
 ---
 
+## 8. Updating the pipeline schedule
+
+The default schedule is 08:00 and 20:00 WIB (01:00 and 13:00 UTC). To change:
+
+```bash
+# Morning trigger (change cron as needed)
+gcloud scheduler jobs update http pipeline-trigger-morning \
+  --schedule="0 1 * * *" \
+  --time-zone="Asia/Jakarta" \
+  --location=asia-southeast2 \
+  --project=$PROJECT
+
+# Afternoon trigger
+gcloud scheduler jobs update http pipeline-trigger-afternoon \
+  --schedule="0 13 * * *" \
+  --time-zone="Asia/Jakarta" \
+  --location=asia-southeast2 \
+  --project=$PROJECT
+```
+
+Cron format: `minute hour day month weekday`. `0 1 * * *` = every day at 01:00 UTC = 08:00 WIB. Use [crontab.guru](https://crontab.guru) to verify your cron expression before applying.
+
+To verify current schedule:
+```bash
+gcloud scheduler jobs list --location=asia-southeast2 --project=$PROJECT
+```
+
+---
+
 ## 9. Known issue: AppsFlyer in_app_events rate limit
 
 AppsFlyer limits: `in_app_events` 12 calls/day/app, `installs` 24/day/app. When hit:
@@ -263,7 +292,7 @@ Common causes:
 
 ---
 
-## 11. Adding a new source (App Store Connect)
+## 11. Adding a new data source
 
 **MoEngage** - fully implemented and E2E verified (2026-06-22: 599 campaigns, 4712 stats rows, exit(0), full pipeline SUCCEEDED). GCP infra provisioned (SA, secret, BQ datasets, Cloud Run Job `extract-moengage`). dbt models built (`stg_moengage_campaigns`, `stg_moengage_campaign_stats`, `mart_moengage_push`, `mart_moengage_campaign_analytics`). pipeline.yaml runs both extracts in parallel (PASS=93 WARN=0 ERROR=0).
 
