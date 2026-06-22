@@ -1,6 +1,6 @@
 # Data Catalog: Play Console Raw Layer
 
-Status: **ingestion code DONE, GCP infra and dbt models PENDING** (as of 2026-06-22).
+Status: **ingestion code DONE, GCP infra DONE (2026-06-22), dbt models and pipeline.yaml PENDING**.
 
 ---
 
@@ -35,12 +35,18 @@ The service account needs these OAuth scopes (set in `client.py`):
 - `https://www.googleapis.com/auth/playdeveloperreporting`
 - `https://www.googleapis.com/auth/androidpublisher`
 
-### Google Play Console access setup
+### Service account used
 
-The SA must be linked to Google Play Console manually (this is not a gcloud command):
-1. Go to Google Play Console > Setup > API access
-2. Link the GCP project that owns `sa-extract-play-console`
-3. Grant the SA "View app information and download bulk reports" permission
+This pipeline uses an existing SA from the client's production GCP project, not a new SA created in `hypefast-data-staging`. The SA already has Play Console access granted.
+
+| Field | Value |
+|---|---|
+| SA email | `dashboard-monitoring-aiinsight@pgd-prd-digital-rating-tring.iam.gserviceaccount.com` |
+| GCP project | `pgd-prd-digital-rating-tring` (client prod) |
+| Secret name | `play-console-sa-key` (in `hypefast-data-staging`) |
+| Key file | `pgd-prd-digital-rating-tring-57c6de79ff3b.json` (gitignored, repo root) |
+
+The Cloud Run Job runtime SA (`sa-extract-play-console@hypefast-data-staging`) only needs BQ + Secret Manager access. The Play Console API auth is handled by the SA key JSON loaded from Secret Manager at runtime.
 
 ---
 
@@ -178,12 +184,23 @@ All raw tables include 8 standard metadata columns appended by the loader:
 
 ---
 
-## GCP Infra (PENDING - not yet provisioned)
+## GCP Infra (DONE - provisioned 2026-06-22, hypefast-data-staging)
 
-Run these commands after completing `docs/gcp-setup.md` sections 1-5:
+| Resource | Status |
+|---|---|
+| SA `sa-extract-play-console` (runtime) | DONE |
+| IAM: bigquery.dataEditor + jobUser | DONE |
+| Secret `play-console-sa-key` (client prod SA key JSON) | DONE (version 1) |
+| IAM: secretmanager.secretAccessor on play-console-sa-key | DONE |
+| BQ datasets: play_raw, play_staging, play_mart | DONE |
+| Cloud Run Job: extract-play-console | DONE |
+
+Commands used (reference for reproducing in client prod):
 
 ```bash
-# SA (already in gcp-setup.md section 2 - shown here for reference)
+export PROJECT=YOUR_GCP_PROJECT
+
+# Runtime SA
 gcloud iam service-accounts create sa-extract-play-console \
   --display-name="Play Console extractor runtime" --project=$PROJECT
 
@@ -195,11 +212,12 @@ gcloud projects add-iam-policy-binding $PROJECT \
   --member="serviceAccount:sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com" \
   --role="roles/bigquery.jobUser"
 
-# Secret (add SA key JSON value out of band - never commit the key file)
+# Secret - store Play Console SA key JSON (from client's prod project)
+# The SA must already have Play Console access granted via Google Play Console UI
 gcloud secrets create play-console-sa-key --replication-policy="automatic" --project=$PROJECT
-cat sa-extract-play-console-key.json | gcloud secrets versions add play-console-sa-key \
+cat play-console-sa-key.json | gcloud secrets versions add play-console-sa-key \
   --data-file=- --project=$PROJECT
-rm sa-extract-play-console-key.json
+rm play-console-sa-key.json   # delete local copy immediately
 
 gcloud secrets add-iam-policy-binding play-console-sa-key \
   --member="serviceAccount:sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com" \
@@ -210,7 +228,7 @@ bq --project_id=$PROJECT mk --location=asia-southeast2 play_raw
 bq --project_id=$PROJECT mk --location=asia-southeast2 play_staging
 bq --project_id=$PROJECT mk --location=asia-southeast2 play_mart
 
-# Cloud Run Job (same ingestion image, --source play_console)
+# Cloud Run Job
 REGISTRY=asia-southeast2-docker.pkg.dev
 gcloud run jobs create extract-play-console \
   --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
@@ -225,7 +243,7 @@ gcloud run jobs create extract-play-console \
   --project=$PROJECT
 ```
 
-After provisioning, add `extract-play-console` as a parallel branch in `orchestration/workflows/pipeline.yaml`.
+Next step: add `extract-play-console` as a parallel branch in `orchestration/workflows/pipeline.yaml`.
 
 ---
 

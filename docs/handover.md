@@ -44,7 +44,7 @@ Then run sections 1–10 of `docs/gcp-setup.md` in order:
 > **Secret note:** The consultant never needs to see the production secrets. The client's admin retrieves them directly from each vendor and adds them to Secret Manager themselves:
 > - **AppsFlyer:** token from the AppsFlyer dashboard (Configuration > API Token v3) into secret `appsflyer-api-token`.
 > - **MoEngage:** workspace ID + API key from the MoEngage dashboard (Settings > APIs) into secret `moengage-api-creds`, formatted as `WORKSPACE_ID:API_KEY` (colon-delimited, no spaces).
-> - **Play Console:** service account key JSON file, downloaded from GCP IAM after linking the SA to Google Play Console (see `docs/data-catalog-play-console.md` for full setup steps). Store in secret `play-console-sa-key`. Delete the local key file after adding to Secret Manager.
+> - **Play Console:** SA key JSON from the client's production GCP project (`pgd-prd-digital-rating-tring`), SA `dashboard-monitoring-aiinsight`. This SA already has Play Console access — no Play Console UI setup needed. Store in secret `play-console-sa-key`. Delete the local key file after adding to Secret Manager.
 
 ---
 

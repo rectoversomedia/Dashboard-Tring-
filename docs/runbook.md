@@ -210,11 +210,11 @@ gcloud secrets versions disable VERSION_NUMBER \
 
 ## 7. Rotating the Play Console service account key
 
-The Play Console secret is a full SA key JSON (not a simple token). To rotate:
+The Play Console secret (`play-console-sa-key`) stores a SA key from the client's production GCP project (`pgd-prd-digital-rating-tring`), not from `hypefast-data-staging`. To rotate:
 
-1. Go to GCP IAM > Service Accounts > `sa-extract-play-console` > Keys
-2. Create a new key (JSON format) - download it
-3. Add to Secret Manager:
+1. Ask the client to generate a new key from their GCP IAM: SA `dashboard-monitoring-aiinsight@pgd-prd-digital-rating-tring.iam.gserviceaccount.com` > Keys > Add Key > JSON
+2. Client sends the new key file securely (never via email or Slack — use a secret sharing tool)
+3. Add new version to Secret Manager:
 ```bash
 cat new-sa-key.json | gcloud secrets versions add play-console-sa-key --data-file=- --project=$PROJECT
 rm new-sa-key.json
@@ -224,9 +224,9 @@ rm new-sa-key.json
 gcloud secrets versions list play-console-sa-key --project=$PROJECT
 gcloud secrets versions disable OLD_VERSION_NUMBER --secret=play-console-sa-key --project=$PROJECT
 ```
-5. Delete the old key from GCP IAM to revoke it completely.
+5. Ask the client to delete the old key from their GCP IAM to fully revoke it.
 
-> If the SA key is compromised, disable the old Secret Manager version AND delete the key from GCP IAM immediately. The Cloud Run Job picks up the new version on the next execution (secrets are resolved at job start).
+> The Cloud Run Job picks up the new secret version on the next execution. No job restart needed.
 
 ---
 
@@ -267,7 +267,7 @@ Common causes:
 
 **MoEngage** - fully implemented and E2E verified (2026-06-22: 599 campaigns, 4712 stats rows, exit(0), full pipeline SUCCEEDED). GCP infra provisioned (SA, secret, BQ datasets, Cloud Run Job `extract-moengage`). dbt models built (`stg_moengage_campaigns`, `stg_moengage_campaign_stats`, `mart_moengage_push`, `mart_moengage_campaign_analytics`). pipeline.yaml runs both extracts in parallel (PASS=93 WARN=0 ERROR=0).
 
-**Play Console** - ingestion code implemented (2026-06-22: `client.py`, `endpoints.py`, `extract.py`, 16 tests PASS). Pulls 6 metric sets (crash rate, ANR rate, stuck wakelock, excessive wakeup, error count, slow start) + paginated reviews via Google Play Developer Reporting API and Android Publisher API. GCP infra NOT YET provisioned (SA, secret, BQ datasets, Cloud Run Job). dbt models NOT YET built. pipeline.yaml NOT YET updated to include play_console branch.
+**Play Console** - ingestion code DONE (2026-06-22: `client.py`, `endpoints.py`, `extract.py`, 16 tests PASS). GCP infra DONE (2026-06-22: SA `sa-extract-play-console`, secret `play-console-sa-key`, BQ datasets play_raw/staging/mart, Cloud Run Job `extract-play-console`). Uses SA key from client prod project `pgd-prd-digital-rating-tring` stored in Secret Manager. dbt models NOT YET built. pipeline.yaml NOT YET updated to include play_console branch.
 
 General steps for any new source:
 

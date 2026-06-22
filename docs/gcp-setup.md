@@ -22,13 +22,14 @@ gcloud services enable run.googleapis.com secretmanager.googleapis.com workflows
 ```bash
 gcloud iam service-accounts create sa-extract-appsflyer --display-name="AppsFlyer extractor runtime" --project=$PROJECT
 gcloud iam service-accounts create sa-extract-moengage --display-name="MoEngage extractor runtime" --project=$PROJECT
-gcloud iam service-accounts create sa-extract-play-console --display-name="Play Console extractor runtime" --project=$PROJECT
 gcloud iam service-accounts create sa-dbt --display-name="dbt transform runtime" --project=$PROJECT
 gcloud iam service-accounts create sa-workflows --display-name="Cloud Workflows orchestrator" --project=$PROJECT
 gcloud iam service-accounts create sa-scheduler --display-name="Cloud Scheduler trigger" --project=$PROJECT
 ```
 
-> **Adding a new source (App Store Connect):** create a dedicated SA per source. Grant only the roles that source needs. Never reuse an existing extractor SA for a different source.
+> **Play Console exception:** the `extract-play-console` job does NOT use a dedicated SA for Play Console API auth. It authenticates to the Play Console using a SA key from the client's production GCP project (`pgd-prd-digital-rating-tring`), stored as a JSON string in Secret Manager (`play-console-sa-key`). The Cloud Run Job itself still runs under a runtime SA that has only BQ + Secret Manager access. See Section 4 (Play Console) for details.
+
+> **Adding a new source (App Store Connect):** create a dedicated SA per source. Grant only the roles that source needs.
 
 ---
 
@@ -70,10 +71,14 @@ gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-extr
 gcloud secrets add-iam-policy-binding moengage-api-creds --member="serviceAccount:sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor" --project=$PROJECT
 ```
 
-### sa-extract-play-console
-Runs the Play Console extract Cloud Run Job. The service account must also be granted access in the Google Play Console UI (see Secret Manager section below).
+### sa-extract-play-console (runtime SA for the Cloud Run Job)
+
+This SA is the runtime identity of the Cloud Run Job — it writes to BigQuery and reads the Play Console SA key from Secret Manager. It does NOT authenticate to the Play Console API directly (that auth uses the SA key JSON stored in the secret).
 
 ```bash
+gcloud iam service-accounts create sa-extract-play-console \
+  --display-name="Play Console extractor runtime" --project=$PROJECT
+
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com" --role="roles/bigquery.dataEditor"
 gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com" --role="roles/bigquery.jobUser"
 gcloud secrets add-iam-policy-binding play-console-sa-key --member="serviceAccount:sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor" --project=$PROJECT
@@ -130,25 +135,25 @@ echo -n "NEW_WORKSPACE_ID:NEW_API_KEY" | gcloud secrets versions add moengage-ap
 
 ### Play Console
 
-The Play Console secret stores the service account JSON key as a raw JSON string. The service account must have the "Play Developer Reporting API" and "Android Publisher API" permissions granted in the Google Play Console UI (Account settings > API access > Link to GCP project > grant access to your SA).
+The Play Console secret stores a service account key JSON from the client's production GCP project (`pgd-prd-digital-rating-tring`). This SA already has Play Developer Reporting API and Android Publisher API access granted via Google Play Console. You do not need to create a new SA or go through the Play Console UI setup.
 
 ```bash
 gcloud secrets create play-console-sa-key --replication-policy="automatic" --project=$PROJECT
 
-# Value: the full content of the SA key JSON file
-# Download the SA key from GCP IAM > Service Accounts > sa-extract-play-console > Keys
-# Then add it to Secret Manager and delete the local file immediately
-cat sa-extract-play-console-key.json | gcloud secrets versions add play-console-sa-key --data-file=- --project=$PROJECT
-rm sa-extract-play-console-key.json
+# Value: the full content of the SA key JSON file from the client's prod project
+# The key file is: pgd-prd-digital-rating-tring-57c6de79ff3b.json (gitignored, never commit)
+# SA email: dashboard-monitoring-aiinsight@pgd-prd-digital-rating-tring.iam.gserviceaccount.com
+cat pgd-prd-digital-rating-tring-57c6de79ff3b.json | gcloud secrets versions add play-console-sa-key --data-file=- --project=$PROJECT
 ```
 
-> **Important:** The SA key JSON grants access to your GCP project. Treat it like a password. Never commit it to git - the `.gitignore` blocks `*.json` files at the repo root, but be careful with any path. After adding to Secret Manager, delete the local file.
+> **Important:** The SA key JSON grants access to the client's production Play Console data. Treat it like a password. The `.gitignore` at repo root blocks `*.json` so it cannot be committed accidentally. Never store the key file anywhere outside the repo root or Secret Manager.
 
-To rotate:
+To rotate (when the client generates a new key):
 ```bash
-# Generate a new key in GCP IAM, add it to Secret Manager, then disable the old version
+# Client generates new key from their GCP IAM, sends securely
 cat new-sa-key.json | gcloud secrets versions add play-console-sa-key --data-file=- --project=$PROJECT
 rm new-sa-key.json
+gcloud secrets versions list play-console-sa-key --project=$PROJECT
 gcloud secrets versions disable OLD_VERSION_NUMBER --secret=play-console-sa-key --project=$PROJECT
 ```
 
