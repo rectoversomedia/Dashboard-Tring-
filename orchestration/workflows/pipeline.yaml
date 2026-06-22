@@ -99,6 +99,68 @@ main:
                             assign:
                               - appsflyer_status: "succeeded"
 
+            - play_console_branch:
+                steps:
+                  - run_extract_play_console:
+                      try:
+                        call: http.post
+                        args:
+                          url: ${"https://run.googleapis.com/v2/projects/" + project + "/locations/" + region + "/jobs/extract-play-console:run"}
+                          auth:
+                            type: OAuth2
+                          body: ${extract_body}
+                        result: play_console_result
+                      except:
+                        as: e
+                        steps:
+                          - fail_play_console_start:
+                              raise: "extract-play-console failed to start"
+
+                  - get_play_console_execution:
+                      assign:
+                        - play_console_execution: ${play_console_result.body.metadata.name}
+
+                  - wait_for_play_console:
+                      steps:
+                        - poll_play_console:
+                            call: http.get
+                            args:
+                              url: ${"https://run.googleapis.com/v2/" + play_console_execution}
+                              auth:
+                                type: OAuth2
+                            result: play_console_poll
+                        - check_play_console_state:
+                            switch:
+                              - condition: ${"reconciling" in play_console_poll.body and play_console_poll.body.reconciling == true}
+                                steps:
+                                  - sleep_play_console_reconciling:
+                                      call: sys.sleep
+                                      args:
+                                        seconds: 15
+                                  - retry_play_console_reconciling:
+                                      next: poll_play_console
+                              - condition: ${play_console_poll.body.conditions[0].state == "CONDITION_SUCCEEDED" and "succeededCount" in play_console_poll.body and play_console_poll.body.succeededCount == play_console_poll.body.taskCount}
+                                next: play_console_done
+                              - condition: ${play_console_poll.body.conditions[0].state == "CONDITION_SUCCEEDED"}
+                                steps:
+                                  - fail_play_console_partial:
+                                      raise: "extract-play-console completed but not all tasks succeeded"
+                              - condition: ${play_console_poll.body.conditions[0].state == "CONDITION_FAILED"}
+                                steps:
+                                  - fail_play_console_execution:
+                                      raise: "extract-play-console execution failed"
+                              - condition: true
+                                steps:
+                                  - sleep_play_console:
+                                      call: sys.sleep
+                                      args:
+                                        seconds: 15
+                                  - retry_play_console:
+                                      next: poll_play_console
+                        - play_console_done:
+                            assign:
+                              - play_console_status: "succeeded"
+
             - moengage_branch:
                 steps:
                   - run_extract_moengage:

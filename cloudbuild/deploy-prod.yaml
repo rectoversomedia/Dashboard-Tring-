@@ -66,6 +66,19 @@ steps:
     waitFor: ["push-ingestion"]
 
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: deploy-play-console-job
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - update
+      - extract-play-console
+      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion:$COMMIT_SHA
+      - --region=${_REGION}
+      - --project=${_PROJECT}
+    waitFor: ["push-ingestion"]
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-dbt-job
     entrypoint: gcloud
     args:
