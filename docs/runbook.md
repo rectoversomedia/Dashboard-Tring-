@@ -6,7 +6,7 @@
 
 ## 1. Triggering a manual pipeline run
 
-> **Workflow behavior:** Workflow triggers extract-appsflyer and extract-moengage **in parallel**, polls each every 15s until SUCCEEDED (both must succeed), then triggers dbt-transform, polls until SUCCEEDED, then returns. Total duration ~6-7 minutes (verified 2026-06-21). If either extract fails (e.g. rate limit, API error), Workflow fails immediately  -  dbt does NOT run.
+> **Workflow behavior:** Workflow triggers extract-appsflyer, extract-moengage, and extract-play-console **in parallel**, polls each every 15s until SUCCEEDED (all three must succeed), then triggers dbt-transform, polls until SUCCEEDED, then returns. Total duration ~6-7 minutes for appsflyer+moengage (play-console adds time on first load; subsequent runs ~2-3 min). If any extract fails, Workflow fails immediately  -  dbt does NOT run.
 
 **Run pipeline (T-1 auto-computed):**
 ```bash
@@ -267,7 +267,7 @@ Common causes:
 
 **MoEngage** - fully implemented and E2E verified (2026-06-22: 599 campaigns, 4712 stats rows, exit(0), full pipeline SUCCEEDED). GCP infra provisioned (SA, secret, BQ datasets, Cloud Run Job `extract-moengage`). dbt models built (`stg_moengage_campaigns`, `stg_moengage_campaign_stats`, `mart_moengage_push`, `mart_moengage_campaign_analytics`). pipeline.yaml runs both extracts in parallel (PASS=93 WARN=0 ERROR=0).
 
-**Play Console** - ingestion code DONE (2026-06-22: `client.py`, `endpoints.py`, `extract.py`, 16 tests PASS). GCP infra DONE (2026-06-22: SA `sa-extract-play-console`, secret `play-console-sa-key`, BQ datasets play_raw/staging/mart, Cloud Run Job `extract-play-console`). Uses SA key from client prod project `pgd-prd-digital-rating-tring` stored in Secret Manager. dbt models NOT YET built. pipeline.yaml NOT YET updated to include play_console branch.
+**Play Console** - ingestion code DONE (2026-06-22: `client.py`, `endpoints.py`, `extract.py`, 16 tests PASS). GCP infra DONE (2026-06-22: SA `sa-extract-play-console`, secret `play-console-sa-key`, BQ datasets play_raw/staging/mart, Cloud Run Job `extract-play-console`). Uses SA key from client prod project `pgd-prd-digital-rating-tring` stored in Secret Manager. dbt models DONE (7 staging + 2 mart). pipeline.yaml DONE (3 parallel branches). Pending: deploy updated Workflow to GCP + dbt E2E verify.
 
 General steps for any new source:
 

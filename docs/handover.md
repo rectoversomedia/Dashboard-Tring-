@@ -225,7 +225,7 @@ gcloud workflows executions list pipeline \
   --limit=5
 ```
 
-Expected: `state: SUCCEEDED`. Extract jobs run in parallel (currently extract-appsflyer + extract-moengage; extract-play-console added once its GCP infra is provisioned). After all extracts complete, dbt-transform runs. See `docs/runbook.md` section 2 for how to verify each stage.
+Expected: `state: SUCCEEDED`. Extract jobs run in parallel (extract-appsflyer, extract-moengage, extract-play-console). After all three complete, dbt-transform runs. See `docs/runbook.md` section 2 for how to verify each stage.
 
 ---
 
@@ -234,7 +234,7 @@ Expected: `state: SUCCEEDED`. Extract jobs run in parallel (currently extract-ap
 | Event | What happens automatically |
 |---|---|
 | Push to `main` on GitLab | Cloud Build trigger fires → build images → roll new images onto Cloud Run Jobs |
-| Cloud Scheduler (twice daily, 08:00 and 20:00 WIB) | Triggers Cloud Workflows → runs extract-appsflyer (8 pulls) and extract-moengage in parallel (play-console added after infra provisioned) → runs dbt |
+| Cloud Scheduler (twice daily, 08:00 and 20:00 WIB) | Triggers Cloud Workflows → runs extract-appsflyer (8 pulls), extract-moengage, and extract-play-console in parallel → runs dbt |
 | Extractor failure | Workflow polling detects non-success, marks the execution `FAILED` (dbt does NOT run) |
 | dbt test failure | Job exits non-zero → Workflow marks the execution `FAILED` |
 
