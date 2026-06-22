@@ -2,6 +2,8 @@
 
 Status: **FULLY DONE (2026-06-22)** - ingestion code, GCP infra, dbt models, pipeline.yaml, E2E all verified. Raw: 3,580 rows across 7 tables. dbt: PASS=140 WARN=0 ERROR=0.
 
+Data model diagram: `PlayConsole_v1.drawio` at repo root (`tring-repo/PlayConsole_v1.drawio`). Open at [diagrams.net](https://app.diagrams.net), export PNG, attach to Confluence TSD Section 5.
+
 ---
 
 ## Overview
