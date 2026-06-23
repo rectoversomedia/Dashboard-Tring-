@@ -3,6 +3,9 @@ import json
 import logging
 import sys
 
+# derived once from a blank record so it stays accurate across Python versions
+_STDLIB_KEYS = frozenset(logging.LogRecord("", 0, "", 0, "", (), None).__dict__)
+
 
 class _StructuredFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -12,33 +15,7 @@ class _StructuredFormatter(logging.Formatter):
             "logger": record.name,
         }
         # anything passed via extra={} ends up as a top-level field
-        for key, value in record.__dict__.items():
-            if key not in (
-                "args",
-                "asctime",
-                "created",
-                "exc_info",
-                "exc_text",
-                "filename",
-                "funcName",
-                "id",
-                "levelname",
-                "levelno",
-                "lineno",
-                "module",
-                "msecs",
-                "message",
-                "msg",
-                "name",
-                "pathname",
-                "process",
-                "processName",
-                "relativeCreated",
-                "stack_info",
-                "thread",
-                "threadName",
-            ):
-                log_entry[key] = value
+        log_entry.update({k: v for k, v in record.__dict__.items() if k not in _STDLIB_KEYS})
         return json.dumps(log_entry, default=str)
 
 
