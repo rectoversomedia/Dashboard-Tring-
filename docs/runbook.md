@@ -450,3 +450,89 @@ gcloud run jobs update dbt-transform \
 cd transform
 dbt source freshness --profiles-dir . --target dev
 ```
+
+---
+
+## 14. Query cost optimization
+
+BigQuery charges by the amount of data scanned per query (on-demand pricing: ~$5 per TB). All mart tables are partitioned and clustered to reduce scan size. This section explains how to use them correctly.
+
+### Partition and cluster config per mart table
+
+| Table | Dataset | Partition column | Cluster columns |
+|---|---|---|---|
+| `mart_appsflyer_install_attribution` | `appsflyer_mart` | `install_date` (DATE) | `media_source`, `campaign`, `platform` |
+| `mart_appsflyer_campaign_performance` | `appsflyer_mart` | `date` (DATE) | `media_source`, `campaign`, `platform` |
+| `mart_appsflyer_user_quality` | `appsflyer_mart` | `date` (DATE) | `media_source`, `campaign`, `platform` |
+| `mart_appsflyer_retention` | `appsflyer_mart` | `cohort_date` (DATE) | `media_source`, `campaign`, `platform` |
+| `mart_appsflyer_fraud` | `appsflyer_mart` | `date` (DATE) | `media_source`, `campaign`, `platform` |
+| `mart_moengage_push` | `moengage_mart` | `stats_date_from` (DATE) | `platform`, `channel` |
+| `mart_moengage_campaign_analytics` | `moengage_mart` | `stats_date_from` (DATE) | `platform`, `channel` |
+| `mart_play_console_app_health` | `play_mart` | `date` (DATE) | `version_code` |
+| `mart_play_console_reviews` | `play_mart` | `review_date` (DATE) | `star_rating` |
+
+**Partition** = BigQuery splits the table into separate storage chunks by date. A query with `WHERE date = '2026-06-01'` only scans that one chunk, not the whole table.
+
+**Cluster** = within each partition chunk, rows are physically sorted by the cluster columns. A query with `WHERE media_source = 'Facebook Ads'` scans less data because matching rows are stored together.
+
+### How to write cost-efficient queries
+
+**Always filter on the partition column first:**
+
+```sql
+-- Good: filters partition column, scans only June data
+SELECT *
+FROM `your-project.appsflyer_mart.mart_appsflyer_campaign_performance`
+WHERE date BETWEEN '2026-06-01' AND '2026-06-30'
+  AND media_source = 'Facebook Ads';
+
+-- Bad: no date filter, scans the entire table
+SELECT *
+FROM `your-project.appsflyer_mart.mart_appsflyer_campaign_performance`
+WHERE media_source = 'Facebook Ads';
+```
+
+**Stack cluster filters after the partition filter:**
+
+```sql
+-- Best: partition filter + cluster filter = minimum scan
+SELECT date, campaign, installs, cost
+FROM `your-project.appsflyer_mart.mart_appsflyer_campaign_performance`
+WHERE date BETWEEN '2026-06-01' AND '2026-06-30'
+  AND media_source = 'Facebook Ads'
+  AND platform = 'android';
+```
+
+**Avoid `SELECT *` on large tables:**
+
+```sql
+-- Good: select only the columns you need
+SELECT date, campaign, installs
+FROM `your-project.appsflyer_mart.mart_appsflyer_campaign_performance`
+WHERE date = '2026-06-23';
+
+-- Expensive: pulls all columns including ones you do not use
+SELECT *
+FROM `your-project.appsflyer_mart.mart_appsflyer_campaign_performance`
+WHERE date = '2026-06-23';
+```
+
+**Check bytes scanned before running a query:**
+
+In BigQuery Console, the estimated bytes scanned appears in the top-right corner of the editor after you write a query (before running it). Aim for MB range, not GB.
+
+```sql
+-- You can also run a dry run via CLI to check bytes without cost
+bq query --dry_run --use_legacy_sql=false --project_id=$PROJECT \
+  'SELECT date, campaign, installs
+   FROM `your-project.appsflyer_mart.mart_appsflyer_campaign_performance`
+   WHERE date = "2026-06-23"'
+```
+
+The output shows `totalBytesProcessed` - this is the scan size before any cost is charged.
+
+### Raw and staging tables
+
+Raw tables (`appsflyer_raw`, `moengage_raw`, `play_raw`) are append-only and not partitioned. **Avoid querying raw tables directly** for analysis - use the mart tables instead. Raw tables grow unbounded and scanning them is expensive.
+
+Staging tables (`appsflyer_staging`, `moengage_staging`, etc.) are views or intermediate tables used only by dbt. Query mart tables for all analysis.
