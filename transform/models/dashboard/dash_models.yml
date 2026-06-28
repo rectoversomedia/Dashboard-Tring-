@@ -1,0 +1,156 @@
+version: 2
+
+models:
+  - name: dash_ratings_daily
+    description: "Average rating per day per platform (android + ios combined). Looker: time series chart of avg_rating by platform."
+    columns:
+      - name: date
+        description: "Review date"
+      - name: platform
+        description: "android or ios"
+      - name: review_count
+        description: "Total reviews on that date"
+      - name: avg_rating
+        description: "Average star rating (1-5 float)"
+      - name: rating_1
+        description: "Count of 1-star reviews"
+      - name: rating_2
+        description: "Count of 2-star reviews"
+      - name: rating_3
+        description: "Count of 3-star reviews"
+      - name: rating_4
+        description: "Count of 4-star reviews"
+      - name: rating_5
+        description: "Count of 5-star reviews"
+
+  - name: dash_rating_distribution
+    description: "Star rating distribution (count + percentage) per platform. Looker: bar chart of pct by rating, filtered by platform."
+    columns:
+      - name: platform
+        description: "android or ios"
+      - name: rating
+        description: "Star rating (1-5)"
+      - name: review_count
+        description: "Reviews with this rating"
+      - name: total_reviews
+        description: "Total reviews for this platform (for pct denominator)"
+      - name: pct
+        description: "Fraction of reviews with this rating (0-1). Multiply by 100 in Looker for %."
+
+  - name: dash_acquisition_by_app_version
+    description: "iOS downloads + sessions per app_version per day. Android not available via REST API."
+    columns:
+      - name: platform
+        description: "Always ios"
+      - name: date
+        description: "Report date"
+      - name: app_version
+        description: "App version string (e.g. 6.1.0)"
+      - name: first_time_downloads
+        description: "First-time downloads on this date"
+      - name: redownloads
+        description: "Redownloads on this date"
+      - name: total_downloads
+        description: "Total downloads"
+      - name: sessions
+        description: "Sessions on this date for this version"
+      - name: unique_devices
+        description: "Unique devices with sessions"
+      - name: total_session_duration
+        description: "Total session seconds"
+
+  - name: dash_acquisition_by_os_version
+    description: "Android health metrics per api_level (OS version) per day. iOS OS version not available."
+    columns:
+      - name: platform
+        description: "Always android"
+      - name: date
+        description: "Report date"
+      - name: os_version
+        description: "Android API level as string (e.g. 33 = Android 13)"
+      - name: avg_crash_rate
+        description: "Average crash rate across all versions/devices for this api_level"
+      - name: avg_anr_rate
+        description: "Average ANR rate"
+      - name: data_points
+        description: "Number of rows aggregated"
+
+  - name: dash_acquisition_by_device
+    description: "Sessions/health metrics per device model per day, both platforms."
+    columns:
+      - name: platform
+        description: "android or ios"
+      - name: date
+        description: "Report date"
+      - name: device
+        description: "Device model (Android: full model name, iOS: device family e.g. iPhone)"
+      - name: avg_crash_rate
+        description: "Android only. Null for iOS."
+      - name: avg_anr_rate
+        description: "Android only. Null for iOS."
+      - name: sessions
+        description: "iOS only. Null for Android."
+      - name: unique_devices
+        description: "iOS only. Null for Android."
+      - name: data_points
+        description: "Number of rows aggregated"
+
+  - name: dash_overview_android
+    description: "Android KPIs per day: health metrics + ratings. Installs not available (Play Console REST API limitation)."
+    columns:
+      - name: date
+        description: "Report date"
+      - name: platform
+        description: "Always android"
+      - name: avg_crash_rate
+        description: "Average crash rate across all versions/devices"
+      - name: avg_anr_rate
+        description: "Average ANR rate"
+      - name: avg_excessive_wakeup_rate
+        description: "Average excessive wakeup rate"
+      - name: avg_stuck_bg_wakelock_rate
+        description: "Average stuck background wakelock rate"
+      - name: total_reviews
+        description: "Reviews received on this date"
+      - name: avg_rating
+        description: "Average star rating on this date"
+      - name: negative_reviews
+        description: "Count of reviews with star_rating <= 2"
+
+  - name: dash_overview_ios
+    description: "iOS KPIs per day: acquisition + engagement + ratings combined."
+    columns:
+      - name: date
+        description: "Report date"
+      - name: platform
+        description: "Always ios"
+      - name: first_time_downloads
+        description: "First-time downloads"
+      - name: redownloads
+        description: "Redownloads"
+      - name: app_units
+        description: "first_time + redownloads (Apple definition)"
+      - name: impressions
+        description: "Store impressions"
+      - name: product_page_views
+        description: "Product page views"
+      - name: conversion_rate
+        description: "first_time_downloads / impressions"
+      - name: installs
+        description: "App installs"
+      - name: deletions
+        description: "App deletions"
+      - name: net_installs
+        description: "installs - deletions"
+      - name: sessions
+        description: "Total sessions"
+      - name: avg_session_duration
+        description: "Average session duration in seconds"
+      - name: unique_devices
+        description: "Unique devices with sessions"
+      - name: total_reviews
+        description: "Reviews received on this date"
+      - name: avg_rating
+        description: "Average star rating"
+      - name: negative_reviews
+        description: "Count of reviews with rating <= 2"

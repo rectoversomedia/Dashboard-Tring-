@@ -290,6 +290,29 @@ bq --project_id=$PROJECT mk --location=asia-southeast2 appstore_staging
 bq --project_id=$PROJECT mk --location=asia-southeast2 appstore_mart
 ```
 
+### Dashboard (pre-aggregated layer for Looker Studio)
+
+```bash
+bq --project_id=$PROJECT mk --location=asia-southeast2 dashboard
+```
+
+Also grant `sa-dbt` write access to the new dataset:
+
+```bash
+bq show --format=prettyjson --project_id=$PROJECT dashboard > /tmp/dashboard_acl.json
+# add this entry to the "access" array in /tmp/dashboard_acl.json:
+# {"role": "WRITER", "userByEmail": "sa-dbt@$PROJECT.iam.gserviceaccount.com"}
+bq update --project_id=$PROJECT --source /tmp/dashboard_acl.json dashboard
+```
+
+Or use the simpler IAM binding (if sa-dbt already has project-level bigquery.dataEditor):
+
+```bash
+# no extra step needed if sa-dbt has roles/bigquery.dataEditor at project level
+# verify: gcloud projects get-iam-policy $PROJECT --flatten="bindings[].members" \
+#   --filter="bindings.members:sa-dbt@$PROJECT.iam.gserviceaccount.com"
+```
+
 ---
 
 ## 7. Build and Push Container Images
