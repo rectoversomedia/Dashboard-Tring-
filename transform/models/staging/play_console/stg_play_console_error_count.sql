@@ -1,4 +1,5 @@
--- Staging: error count. Cast types, dedup per date x report_type x version_code (latest ingest).
+-- Staging: error count. Cast types, dedup per date x report_type x version_code x device x api_level (latest ingest).
+-- countryCode not supported by errorCountMetricSet API (no countryCode dim available).
 -- reportType is a required dimension for errorCountMetricSet (API constraint).
 -- No confidence intervals for error count (API does not return CI for count metrics).
 
@@ -13,6 +14,8 @@ typed as (
         metric_set,
         reportType                                          as report_type,
         safe_cast(versionCode as int64)                     as version_code,
+        deviceModel                                         as device_model,
+        safe_cast(apiLevel as int64)                        as api_level,
 
         safe_cast(errorReportCount as int64)                as error_report_count,
         safe_cast(distinctUsers as int64)                   as distinct_users,
@@ -29,7 +32,7 @@ deduped as (
     select *
     from typed
     qualify row_number() over (
-        partition by date, report_type, version_code
+        partition by date, report_type, version_code, device_model, api_level
         order by _ingested_at desc
     ) = 1
 )

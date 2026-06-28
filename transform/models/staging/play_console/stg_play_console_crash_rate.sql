@@ -1,4 +1,4 @@
--- Staging: crash rate. Cast types, dedup to one row per date x version_code (latest ingest).
+-- Staging: crash rate. Cast types, dedup to one row per date x version_code x device x api_level x country (latest ingest).
 -- Data lags 2-3 days from Play Console (API constraint, not a pipeline bug).
 -- Confidence intervals may be absent for small sample sizes (CI fields are nullable).
 
@@ -12,6 +12,9 @@ typed as (
         aggregation_period,
         metric_set,
         safe_cast(versionCode as int64)                     as version_code,
+        deviceModel                                         as device_model,
+        safe_cast(apiLevel as int64)                        as api_level,
+        countryCode                                         as country_code,
 
         safe_cast(crashRate as float64)                     as crash_rate,
         safe_cast(crashRate_ci_lower as float64)            as crash_rate_ci_lower,
@@ -31,7 +34,7 @@ deduped as (
     select *
     from typed
     qualify row_number() over (
-        partition by date, version_code
+        partition by date, version_code, device_model, api_level, country_code
         order by _ingested_at desc
     ) = 1
 )
