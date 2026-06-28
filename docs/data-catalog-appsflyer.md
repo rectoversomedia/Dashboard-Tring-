@@ -268,6 +268,16 @@ Multiple job executions during OOM debugging consumed the 12-call daily quota fo
 | Fix considered | User-level join (appsflyer_id) would fix it but adds complexity and is out of scope |
 | Action | No range test on this column. Comment added in SQL and YAML. Dashboard consumers should note this metric may show > 100% for small campaign/date combinations. |
 
+### retention D1/D7/D30 = 0 before April 24 2026
+
+| Field | Detail |
+|---|---|
+| Metric | `d1_retention`, `d7_retention`, `d30_retention` in `mart_appsflyer_retention` |
+| Issue | All retention values are 0 for cohort_date before 2026-04-24 |
+| Root cause | `SplashScreen_Loading` in-app events only exist from 2026-04-24 onward. Users who installed before that date have no activity events to match against. Confirmed via direct API check (2026-06-29). |
+| Is it a bug? | No - event tracking was not active before that date (SDK or event instrumentation not yet live) |
+| Action | Confirm with client/dev team when AppsFlyer SDK + SplashScreen_Loading event were first instrumented. Retention data is only meaningful from 2026-04-24 onward. |
+
 ---
 
 ## Data Layers & BQ Datasets
