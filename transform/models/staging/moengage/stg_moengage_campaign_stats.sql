@@ -1,6 +1,7 @@
 -- Staging: campaign stats. Cast types, dedup to one row per campaign_id x platform x date (latest ingest).
 -- Raw stores all source fields as STRING. platform comes from _flatten_stats output (ANDROID/IOS/UNKNOWN).
--- delivery_funnel and conversion_goal_stats are Python str(dict) -- kept as strings.
+-- delivery_funnel and conversion_goal_stats stored as JSON strings (valid JSON from ingestion).
+-- reachable_users_in_segment extracted from delivery_funnel JSON.
 
 with source as (
     select * from {{ source('moengage_raw', 'raw_campaign_stats') }}
@@ -25,7 +26,10 @@ typed as (
         safe_cast(sent_rate as float64)         as sent_rate,
         safe_cast(failure_rate as float64)      as failure_rate,
 
-        -- nested fields kept as strings
+        -- extracted from delivery_funnel JSON
+        safe_cast(json_value(delivery_funnel, '$.reachable_users_in_segment') as int64) as reachable_users_in_segment,
+
+        -- nested fields kept as JSON strings
         delivery_funnel,
         conversion_goal_stats,
 

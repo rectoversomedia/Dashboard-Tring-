@@ -495,6 +495,12 @@ gcloud run jobs create extract-moengage \
 
 ## 14. Deploying a change
 
+> **Important:** All code (ingestion Python and dbt SQL models) is baked into Docker images at build time. Running `gcloud run jobs execute` without rebuilding the image will use stale code from the previous build. Always rebuild first when code changes.
+>
+> - Changed `transform/` SQL? Rebuild both images (build-push.yaml builds ingestion + dbt together), update `dbt-transform`, then execute.
+> - Changed `ingestion/` Python? Rebuild, update all `extract-*` jobs, then execute.
+> - Changed both? Rebuild once, update all 5 jobs.
+
 ```bash
 # Build + push new image
 gcloud builds submit . \

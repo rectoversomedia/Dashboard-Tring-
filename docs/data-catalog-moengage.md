@@ -48,11 +48,11 @@ Reference date for row counts: **2026-06-22** (validated from E2E run: 599 campa
 | campaign_delivery_type | STRING | SCHEDULED / TRIGGERED / PERIODIC |
 | created_at | STRING (ISO timestamp) | Campaign creation time |
 | sent_time | STRING (ISO timestamp) | Last send time (null if never sent) |
-| basic_details | STRING (Python dict repr) | Campaign name, tags, app_id - stored as opaque string |
-| segmentation_details | STRING (Python dict repr) | Audience segmentation config - opaque string |
-| conversion_goal_details | STRING (Python dict repr) | Conversion goal config - null/`{}` if not configured |
+| basic_details | STRING (JSON) | Campaign name, tags, app_id - stored as valid JSON |
+| segmentation_details | STRING (JSON) | Audience segmentation config - stored as valid JSON |
+| conversion_goal_details | STRING (JSON) | Conversion goal config - null/`{}` if not configured |
 
-> **Note on nested fields:** `basic_details`, `segmentation_details`, `conversion_goal_details` are stored via Python `str(dict)`, which uses single quotes - NOT valid JSON. Cannot use BigQuery `json_value()` on these. Access campaign name from `basic_details` requires string parsing or re-extraction at the source level.
+> **Note on nested fields:** `basic_details`, `segmentation_details`, `conversion_goal_details` are stored as valid JSON strings (double-quoted keys). BigQuery `json_value()` and `json_query()` work on these columns. Fix applied 2026-06-29: `bq_loader.py` now uses `json.dumps()` instead of `str()` for dict/list values.
 
 ---
 
@@ -87,8 +87,8 @@ Reference date for row counts: **2026-06-22** (validated from E2E run: 599 campa
 | delivery_rate | STRING (FLOAT64) | sent / attempted (API-provided) |
 | sent_rate | STRING (FLOAT64) | Proportion of audience reached (API-provided) |
 | failure_rate | STRING (FLOAT64) | failed / attempted (API-provided) |
-| delivery_funnel | STRING (Python dict repr) | Delivery funnel breakdown - opaque string |
-| conversion_goal_stats | STRING (Python dict repr) | Conversion goal metrics - `'{}'` if no goal configured |
+| delivery_funnel | STRING (JSON) | Delivery funnel breakdown including `reachable_users_in_segment` - stored as valid JSON |
+| conversion_goal_stats | STRING (JSON) | Conversion goal metrics - `'{}'` if no goal configured - stored as valid JSON |
 
 > **CTR scale warning:** `ctr` is on a 0-100 percentage scale (e.g. `25.0` means 25%). This differs from AppsFlyer where ratios are 0-1. Do NOT compare CTR values between the two sources directly. CTR can exceed 100 when `sent=0` but `click>0` - this is a MoEngage data edge case, not a pipeline bug.
 
@@ -127,24 +127,26 @@ All meta columns are injected by the ingestion layer at load time.
 ### Staging: stg_moengage_campaigns
 - Dedup: latest row per `campaign_id` by `_ingested_at DESC`
 - Casts: `created_at`, `sent_time` to TIMESTAMP; `_extract_from`, `_extract_to` to DATE
-- Nested fields (`basic_details`, `segmentation_details`, `conversion_goal_details`) kept as opaque strings
+- Extracts scalar columns from JSON: `campaign_name` (from `basic_details.name`), `segment_tags` (JSON array from `segmentation_details.tags`)
+- Nested fields (`basic_details`, `segmentation_details`, `conversion_goal_details`) kept as JSON strings for auditability
 
 ### Staging: stg_moengage_campaign_stats
 - Dedup: latest row per `campaign_id, platform, locale, variation, _extract_from`
 - Casts: `sent`, `impression`, `click`, `attempted`, `failed`, `device_start` to INT64; `ctr`, `delivery_rate`, `sent_rate`, `failure_rate` to FLOAT64
-- `delivery_funnel`, `conversion_goal_stats` kept as opaque strings
+- Extracts scalar: `reachable_users_in_segment` (INT64 from `delivery_funnel.reachable_users_in_segment`)
+- `delivery_funnel`, `conversion_goal_stats` kept as JSON strings
 
 ### Mart: mart_moengage_push (Group A - Push Metrics)
-- Grain: `campaign_id x platform x stats_date_from x stats_date_to` (the GROUP BY also carries `channel`, `campaign_status`, `campaign_delivery_type` from the joined campaigns table, but those are functionally dependent on `campaign_id`, so the effective grain is one row per campaign x platform x stats window)
+- Grain: `campaign_id x platform x stats_date_from x stats_date_to`
 - Filter: `variation = 'all_variations'` (avoids double-counting per-variation rows)
 - Metrics: `sent`, `open_proxy` (= impression), `click`, `click_rate`, `open_proxy_rate`
 - Partition: `stats_date_from` (DATE); Cluster: `platform, channel`
 
 ### Mart: mart_moengage_campaign_analytics (Group E - Campaign Analytics)
-- Grain: `campaign_id x platform x stats_date_from x stats_date_to` (the GROUP BY also includes `channel`, `campaign_status`, `campaign_delivery_type`, `campaign_basic_details` and the `conversion_goal_stats_raw` expression, all functionally dependent on `campaign_id`, so the effective grain is one row per campaign x platform x stats window)
+- Grain: `campaign_id x platform x stats_date_from x stats_date_to`
 - Filter: `variation = 'all_variations'`
-- Adds: `campaign_basic_details` (raw metadata string), full delivery funnel (`attempted`, `failed`)
-- Metrics: `open_proxy_rate`, `click_rate`, `delivery_rate`, `conversion_goal_stats_raw`
+- Adds: `campaign_name` (STRING, from basic_details.name), `segment_tags` (JSON array string, from segmentation_details.tags), full delivery funnel (`attempted`, `failed`, `target_users`)
+- Metrics: `target_users` (= reachable_users_in_segment), `open_proxy_rate`, `click_rate`, `delivery_rate`, `conversion_goal_stats_raw`
 - `conversion_goal_stats_raw` is null when no goal configured (`'{}'` input → null output)
 - Partition: `stats_date_from` (DATE); Cluster: `platform, channel`
 
@@ -180,7 +182,7 @@ The original dashboard requirement defines five metric groups (A-E) for MoEngage
 | ALL_PLATFORMS | Valid platform value - cross-platform aggregate. Not a data error. |
 | impression > sent | Can happen; impression = notification shown on screen (can be shown multiple times). open_proxy_rate can exceed 1.0. |
 | delivery_rate > 1.0 | Timing artifact in MoEngage counts. Not capped in mart. |
-| Nested fields not parseable as JSON | Python str(dict) uses single quotes. `json_value()` will fail on these columns. |
+| Nested fields stored as valid JSON | `basic_details`, `segmentation_details`, `delivery_funnel`, `conversion_goal_stats` are all valid JSON strings. `json_value()` and `json_query()` work on these columns. |
 | conversion_goal_stats empty | Most campaigns have no conversion goal. `'{}'` in raw = null in mart. |
 | _app_id and _platform empty | MoEngage is workspace-level; platform comes from the `platform` response field, not meta columns. |
 | Secret format | `moengage-api-creds` holds `WORKSPACE_ID:API_KEY` as one colon-delimited string. |

@@ -81,6 +81,43 @@ class TestFlattenStats:
         assert rows[0]["campaign_id"] == "campaign-abc"
         assert rows[0]["platform"] == "ANDROID"
         assert rows[0]["sent"] == 100
+        # delivery_funnel and conversion_goal_stats must be valid JSON strings (not Python repr)
+        import json
+
+        assert json.loads(rows[0]["delivery_funnel"]) == {}
+        assert json.loads(rows[0]["conversion_goal_stats"]) == {}
+
+    def test_flatten_delivery_funnel_json(self):
+        import json
+
+        from tring_ingest.sources.moengage.extract import _flatten_stats
+
+        stats_data = {
+            "platforms": {
+                "ANDROID": {
+                    "locales": {
+                        "default": {
+                            "variations": {
+                                "all_variations": {
+                                    "performance_stats": {"sent": 500},
+                                    "delivery_funnel": {
+                                        "reachable_users_in_segment": 1000,
+                                        "sent": 500,
+                                    },
+                                    "conversion_goal_stats": {"goal": "purchase", "count": 12},
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        rows = _flatten_stats("campaign-xyz", stats_data)
+        assert len(rows) == 1
+        funnel = json.loads(rows[0]["delivery_funnel"])
+        assert funnel["reachable_users_in_segment"] == 1000
+        goal = json.loads(rows[0]["conversion_goal_stats"])
+        assert goal["goal"] == "purchase"
 
     def test_flatten_two_platforms(self):
         from tring_ingest.sources.moengage.extract import _flatten_stats

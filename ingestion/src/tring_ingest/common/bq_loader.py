@@ -4,6 +4,7 @@
 import contextlib
 import csv
 import io
+import json
 import uuid
 from datetime import UTC, datetime
 
@@ -172,7 +173,10 @@ def load_json_rows_to_raw(
 
     enriched = []
     for row in rows:
-        r = {col: str(row.get(col, "")) for col in source_columns}
+        r = {
+            col: (json.dumps(v) if isinstance(v := row.get(col, ""), dict | list) else str(v))
+            for col in source_columns
+        }
         r["_ingested_at"] = ingested_at
         r["_source"] = source
         r["_app_id"] = ""

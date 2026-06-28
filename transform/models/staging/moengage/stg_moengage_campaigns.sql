@@ -1,7 +1,6 @@
 -- Staging: campaigns. Cast types, dedup to one row per campaign_id (latest ingest).
--- Raw stores all fields as STRING (load_json_rows_to_raw contract).
--- basic_details / segmentation_details are Python str(dict) -- accessed as opaque strings.
--- Nested field extraction deferred to mart layer if needed.
+-- basic_details and segmentation_details stored as valid JSON (ingestion fix in bq_loader.py).
+-- campaign_name and segment_tags extracted as scalar columns for mart joins.
 
 with source as (
     select * from {{ source('moengage_raw', 'raw_campaigns') }}
@@ -13,10 +12,14 @@ typed as (
         channel,
         status,
         campaign_delivery_type,
-        safe_cast(created_at as timestamp)      as created_at,
-        safe_cast(sent_time as timestamp)        as sent_time,
+        safe_cast(created_at as timestamp)                              as created_at,
+        safe_cast(sent_time as timestamp)                               as sent_time,
 
-        -- raw nested fields kept as strings for auditability
+        -- extracted scalar fields
+        json_value(basic_details, '$.name')                            as campaign_name,
+        json_query(basic_details, '$.tags')                            as segment_tags,
+
+        -- raw nested fields kept as JSON strings for auditability
         basic_details,
         segmentation_details,
         conversion_goal_details,
@@ -24,8 +27,8 @@ typed as (
         _ingested_at,
         _source,
         _run_id,
-        safe_cast(_extract_from as date)        as _extract_from,
-        safe_cast(_extract_to as date)          as _extract_to
+        safe_cast(_extract_from as date)                               as _extract_from,
+        safe_cast(_extract_to as date)                                 as _extract_to
     from source
 ),
 

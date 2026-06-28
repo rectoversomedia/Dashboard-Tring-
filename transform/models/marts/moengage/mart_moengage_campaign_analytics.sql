@@ -5,14 +5,16 @@
 
 select
     s.campaign_id,
+    c.campaign_name,
     c.channel,
     c.status                                                            as campaign_status,
     c.campaign_delivery_type,
-    c.basic_details                                                     as campaign_basic_details,
+    c.segment_tags,
     s.platform,
     s._extract_from                                                     as stats_date_from,
     s._extract_to                                                       as stats_date_to,
 
+    sum(s.reachable_users_in_segment)                                   as target_users,
     sum(s.sent)                                                         as sent,
     sum(s.impression)                                                   as open_proxy,
     sum(s.click)                                                        as click,
@@ -39,5 +41,5 @@ from {{ ref('stg_moengage_campaign_stats') }} s
 left join {{ ref('stg_moengage_campaigns') }} c
     on s.campaign_id = c.campaign_id
 where s.variation = 'all_variations'
-group by 1, 2, 3, 4, 5, 6, 7, 8,
+group by 1, 2, 3, 4, 5, 6, 7, 8, 9,
     case when s.conversion_goal_stats = '{}' then null else s.conversion_goal_stats end

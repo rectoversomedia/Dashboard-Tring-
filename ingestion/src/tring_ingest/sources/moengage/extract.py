@@ -1,3 +1,4 @@
+import json
 import uuid
 
 from tring_ingest.common.bq_loader import load_json_rows_to_raw
@@ -56,8 +57,8 @@ def _flatten_stats(campaign_id: str, stats_data: dict) -> list[dict]:
                     "variation": variation,
                 }
                 row.update(metrics.get("performance_stats", {}))
-                row["delivery_funnel"] = str(metrics.get("delivery_funnel", {}))
-                row["conversion_goal_stats"] = str(metrics.get("conversion_goal_stats", {}))
+                row["delivery_funnel"] = json.dumps(metrics.get("delivery_funnel", {}))
+                row["conversion_goal_stats"] = json.dumps(metrics.get("conversion_goal_stats", {}))
                 rows.append(row)
     return rows
 
