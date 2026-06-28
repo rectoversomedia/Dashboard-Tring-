@@ -202,6 +202,8 @@ gcloud workflows run pipeline \
 
 > Use Option A when you want all sources backfilled for the same date range in one shot. dbt runs automatically after all extracts succeed.
 
+> **MoEngage note:** Option A sends a single window to MoEngage (e.g. one month). MoEngage API returns aggregate totals per window, not per-day rows. If the dashboard shows daily trend, use Option C below for MoEngage.
+
 **Option B  -  Backfill one source at a time (bypass Workflow):**
 
 Use this when sources need different date ranges, or you want to avoid triggering AppsFlyer (rate limit concern).
@@ -261,6 +263,19 @@ gcloud run jobs execute dbt-transform \
   --region=asia-southeast2 \
   --project=$PROJECT
 ```
+
+**Option C  -  MoEngage per-day backfill (laptop-free via GCP Workflow):**
+
+> **Why needed:** MoEngage campaign-stats API returns aggregate totals for the entire window, not per-day rows. To get daily trend data in the dashboard, each day must be ingested as a separate 1-day window. Option A and B send one window per run -- correct for all sources except MoEngage trend use cases.
+
+> **Status: NOT YET IMPLEMENTED.** Planned as Cloud Workflow `moengage-backfill` at `orchestration/workflows/moengage_backfill.yaml`. When built, run via:
+> ```bash
+> gcloud workflows run moengage-backfill \
+>   --data='{"date_from":"2026-01-01","date_to":"2026-01-31"}' \
+>   --location=asia-southeast2 \
+>   --project=$PROJECT
+> ```
+> The workflow loops day by day, triggers `extract-moengage` per date, waits for each to finish. Laptop can be closed. Use local script `tring-repo/test-moengage/backfill_daily.py` in the meantime.
 
 ---
 
