@@ -48,7 +48,7 @@ git push rectoverso feature/your-feature
 
 **Step 4 — Open PR: feature → develop**
 
-1. Go to GitHub (github.com/rectoversomedia/Dashboard-Tring-)
+1. Go to GitHub → rectoversomedia/Dashboard-Tring- (remote: `rectoverso`)
 2. Banner "feature/your-feature had recent pushes" → click **Compare & pull request**
    - Or: Pull requests → New pull request → base: `develop` ← compare: `feature/your-feature`
 3. Fill title + description → click **Create pull request**
@@ -70,7 +70,7 @@ git pull rectoverso develop   # keep rectoverso in sync
 
 **Step 7 — Open PR: develop → main**
 
-1. Go to GitHub → Pull requests → New pull request
+1. Go to GitHub → rectoversomedia/Dashboard-Tring- → Pull requests → New pull request
    - base: `main` ← compare: `develop`
 2. Title: e.g. `release - deploy verified develop to prod`
 3. Review → **Create pull request** → **Merge pull request** → **Confirm merge**
