@@ -99,6 +99,29 @@ models:
             data_type: date
           +cluster_by: ["rating"]
 
+    dashboard:
+      +materialized: table
+      +schema: dashboard
+      +tags: ["dashboard"]
+      +partition_by:
+        field: date
+        data_type: date
+      dash_ratings_daily:
+        +cluster_by: ["platform"]
+      dash_rating_distribution:
+        +partition_by: null
+        +cluster_by: ["platform", "rating"]
+      dash_acquisition_by_app_version:
+        +cluster_by: ["platform", "app_version"]
+      dash_acquisition_by_os_version:
+        +cluster_by: ["platform", "os_version"]
+      dash_acquisition_by_device:
+        +cluster_by: ["platform", "device"]
+      dash_overview_android:
+        +cluster_by: ["platform"]
+      dash_overview_ios:
+        +cluster_by: ["platform"]
+
 seeds:
   tring_transform:
     +schema: staging
