@@ -1,6 +1,6 @@
 # Data Catalog: Play Console Raw Layer
 
-Status: **FULLY DONE (2026-06-22)** - ingestion code, GCP infra, dbt models, pipeline.yaml, E2E all verified. Raw: 3,580 rows across 7 tables. dbt: PASS=140 WARN=0 ERROR=0.
+Status: **FULLY DONE (2026-06-28)** - ingestion code, GCP infra, dbt models, pipeline.yaml, E2E all verified. Raw: 3,580 rows across 7 tables. dbt: PASS=140 WARN=0 ERROR=0. Vitals dimensions expanded 2026-06-28: added deviceModel, apiLevel, countryCode to all 6 metric sets (errorCountMetricSet: deviceModel + apiLevel only, countryCode not supported by API).
 
 Data model diagram: `PlayConsole_v1.drawio` at repo root (`tring-repo/PlayConsole_v1.drawio`). Open at [diagrams.net](https://app.diagrams.net), export PNG, attach to Confluence TSD Section 5.
 
@@ -10,12 +10,12 @@ Data model diagram: `PlayConsole_v1.drawio` at repo root (`tring-repo/PlayConsol
 
 | Data Type | BQ Table | Source API | Columns |
 |---|---|---|---|
-| Crash rate | `play_raw.raw_crash_rate` | Play Developer Reporting API | 3 metrics + CI bounds + versionCode + 7 meta |
-| ANR rate | `play_raw.raw_anr_rate` | Play Developer Reporting API | 3 metrics + CI bounds + versionCode + 7 meta |
-| Stuck background wakelock rate | `play_raw.raw_stuck_bg_wakelock_rate` | Play Developer Reporting API | 3 metrics + versionCode + 7 meta (no CI) |
-| Excessive wakeup rate | `play_raw.raw_excessive_wakeup_rate` | Play Developer Reporting API | 3 metrics + versionCode + 7 meta (no CI) |
-| Error count | `play_raw.raw_error_count` | Play Developer Reporting API | 2 metrics + reportType + versionCode + 7 meta |
-| Slow start rate | `play_raw.raw_slow_start_rate` | Play Developer Reporting API | 3 metrics + versionCode + startType + 7 meta (no CI) |
+| Crash rate | `play_raw.raw_crash_rate` | Play Developer Reporting API | 3 metrics + CI bounds + versionCode + deviceModel + apiLevel + countryCode + 7 meta |
+| ANR rate | `play_raw.raw_anr_rate` | Play Developer Reporting API | 3 metrics + CI bounds + versionCode + deviceModel + apiLevel + countryCode + 7 meta |
+| Stuck background wakelock rate | `play_raw.raw_stuck_bg_wakelock_rate` | Play Developer Reporting API | 3 metrics + versionCode + deviceModel + apiLevel + countryCode + 7 meta (no CI) |
+| Excessive wakeup rate | `play_raw.raw_excessive_wakeup_rate` | Play Developer Reporting API | 3 metrics + versionCode + deviceModel + apiLevel + countryCode + 7 meta (no CI) |
+| Error count | `play_raw.raw_error_count` | Play Developer Reporting API | 2 metrics + reportType + versionCode + deviceModel + apiLevel + 7 meta (no countryCode - API constraint) |
+| Slow start rate | `play_raw.raw_slow_start_rate` | Play Developer Reporting API | 3 metrics + versionCode + startType + deviceModel + apiLevel + countryCode + 7 meta (no CI) |
 | Reviews | `play_raw.raw_reviews` | Android Publisher API | 16 source + 7 meta |
 
 ---
@@ -68,7 +68,7 @@ All metric set endpoints are POST `.../{metricSetName}:query` with a JSON body s
 ### raw_crash_rate
 
 - **Endpoint:** `/apps/com.pegadaiandigital/crashRateMetricSet:query`
-- **Dimensions:** `versionCode`
+- **Dimensions:** `versionCode`, `deviceModel`, `apiLevel`, `countryCode`
 - **Metrics:** `crashRate`, `crashRate7dUserWeighted`, `crashRate28dUserWeighted`
 
 | Column | Type in raw (STRING) | Description |
@@ -77,6 +77,9 @@ All metric set endpoints are POST `.../{metricSetName}:query` with a JSON body s
 | date | STRING (YYYY-MM-DD) | Start date of the daily window |
 | aggregation_period | STRING | Always `DAILY` |
 | versionCode | STRING | App version code |
+| deviceModel | STRING | Device model identifier (e.g. `Infinix/Infinix-X6525`) |
+| apiLevel | STRING | Android API level (e.g. `33` = Android 13) |
+| countryCode | STRING | Two-letter country code (e.g. `ID`) |
 | crashRate | STRING (decimal) | Distinct users who experienced a crash / total daily active users |
 | crashRate7dUserWeighted | STRING (decimal) | 7-day user-weighted rolling average |
 | crashRate28dUserWeighted | STRING (decimal) | 28-day user-weighted rolling average |
@@ -87,7 +90,7 @@ All metric set endpoints are POST `.../{metricSetName}:query` with a JSON body s
 ### raw_anr_rate
 
 - **Endpoint:** `/apps/com.pegadaiandigital/anrRateMetricSet:query`
-- **Dimensions:** `versionCode`
+- **Dimensions:** `versionCode`, `deviceModel`, `apiLevel`, `countryCode`
 - **Metrics:** `anrRate`, `anrRate7dUserWeighted`, `anrRate28dUserWeighted`
 
 Same structure as `raw_crash_rate` but with `anr*` column names. **Includes CI bounds** (`anrRate_ci_lower`, `anrRate_ci_upper`); the ANR rate metric set returns confidence interval data, same as crash rate.
@@ -95,26 +98,28 @@ Same structure as `raw_crash_rate` but with `anr*` column names. **Includes CI b
 ### raw_stuck_bg_wakelock_rate
 
 - **Endpoint:** `/apps/com.pegadaiandigital/stuckBackgroundWakelockRateMetricSet:query`
-- **Dimensions:** `versionCode`
+- **Dimensions:** `versionCode`, `deviceModel`, `apiLevel`, `countryCode`
 - **Metrics:** `stuckBgWakelockRate`, `stuckBgWakelockRate7dUserWeighted`, `stuckBgWakelockRate28dUserWeighted`
 
-Same structure as `raw_anr_rate` with `stuckBgWakelockRate*` column names. **No CI bounds.**
+Same structure as `raw_crash_rate` with `stuckBgWakelockRate*` column names. **No CI bounds.**
 
 ### raw_excessive_wakeup_rate
 
 - **Endpoint:** `/apps/com.pegadaiandigital/excessiveWakeupRateMetricSet:query`
-- **Dimensions:** `versionCode`
+- **Dimensions:** `versionCode`, `deviceModel`, `apiLevel`, `countryCode`
 - **Metrics:** `excessiveWakeupRate`, `excessiveWakeupRate7dUserWeighted`, `excessiveWakeupRate28dUserWeighted`
 
-Same structure as `raw_anr_rate` with `excessiveWakeupRate*` column names. **No CI bounds.**
+Same structure as `raw_crash_rate` with `excessiveWakeupRate*` column names. **No CI bounds.**
 
 ### raw_error_count
 
 - **Endpoint:** `/apps/com.pegadaiandigital/errorCountMetricSet:query`
-- **Dimensions:** `reportType`, `versionCode`
+- **Dimensions:** `reportType`, `versionCode`, `deviceModel`, `apiLevel`
 - **Metrics:** `errorReportCount`, `distinctUsers`
 
 > `reportType` is a REQUIRED dimension for `errorCountMetricSet` (API constraint, verified live). Omitting it returns a 400 error.
+
+> `countryCode` is NOT supported by `errorCountMetricSet` (API constraint, verified live 2026-06-28). Adding it returns a 400 error. The other 5 metric sets do support `countryCode`.
 
 | Column | Type in raw (STRING) | Description |
 |---|---|---|
@@ -123,6 +128,8 @@ Same structure as `raw_anr_rate` with `excessiveWakeupRate*` column names. **No 
 | aggregation_period | STRING | Always `DAILY` |
 | reportType | STRING | Type of error report: `ANR` or `CRASH` |
 | versionCode | STRING | App version code |
+| deviceModel | STRING | Device model identifier |
+| apiLevel | STRING | Android API level |
 | errorReportCount | STRING (integer) | Total number of error reports |
 | distinctUsers | STRING (integer) | Number of distinct users affected |
 
@@ -131,7 +138,7 @@ No confidence interval columns (this metric set does not return CI bounds).
 ### raw_slow_start_rate
 
 - **Endpoint:** `/apps/com.pegadaiandigital/slowStartRateMetricSet:query`
-- **Dimensions:** `versionCode`, `startType`
+- **Dimensions:** `versionCode`, `startType`, `deviceModel`, `apiLevel`, `countryCode`
 - **Metrics:** `slowStartRate`, `slowStartRate7dUserWeighted`, `slowStartRate28dUserWeighted`
 
 | Column | Type in raw (STRING) | Description |
@@ -141,6 +148,9 @@ No confidence interval columns (this metric set does not return CI bounds).
 | aggregation_period | STRING | Always `DAILY` |
 | versionCode | STRING | App version code |
 | startType | STRING | `COLD`, `WARM`, or `HOT` |
+| deviceModel | STRING | Device model identifier |
+| apiLevel | STRING | Android API level |
+| countryCode | STRING | Two-letter country code |
 | slowStartRate | STRING (decimal) | Fraction of sessions with slow start time |
 | slowStartRate7dUserWeighted | STRING (decimal) | 7-day user-weighted rolling average |
 | slowStartRate28dUserWeighted | STRING (decimal) | 28-day user-weighted rolling average |
@@ -267,12 +277,12 @@ Views. Dedup by natural key on latest `_ingested_at`. All STRING fields cast to 
 
 | Model | Grain | Key columns |
 |---|---|---|
-| `stg_play_console_crash_rate` | date x version_code | crash_rate, crash_rate_7d, crash_rate_28d, crash_rate_ci_lower/upper |
-| `stg_play_console_anr_rate` | date x version_code | anr_rate, anr_rate_7d, anr_rate_28d, anr_rate_ci_lower/upper |
-| `stg_play_console_stuck_bg_wakelock_rate` | date x version_code | stuck_bg_wakelock_rate, _7d, _28d |
-| `stg_play_console_excessive_wakeup_rate` | date x version_code | excessive_wakeup_rate, _7d, _28d |
-| `stg_play_console_error_count` | date x report_type x version_code | error_report_count, distinct_users |
-| `stg_play_console_slow_start_rate` | date x version_code x start_type | slow_start_rate, _7d, _28d |
+| `stg_play_console_crash_rate` | date x version_code x device_model x api_level x country_code | crash_rate, crash_rate_7d, crash_rate_28d, crash_rate_ci_lower/upper |
+| `stg_play_console_anr_rate` | date x version_code x device_model x api_level x country_code | anr_rate, anr_rate_7d, anr_rate_28d, anr_rate_ci_lower/upper |
+| `stg_play_console_stuck_bg_wakelock_rate` | date x version_code x device_model x api_level x country_code | stuck_bg_wakelock_rate, _7d, _28d |
+| `stg_play_console_excessive_wakeup_rate` | date x version_code x device_model x api_level x country_code | excessive_wakeup_rate, _7d, _28d |
+| `stg_play_console_error_count` | date x report_type x version_code x device_model x api_level | error_report_count, distinct_users (no country_code - API constraint) |
+| `stg_play_console_slow_start_rate` | date x version_code x start_type x device_model x api_level x country_code | slow_start_rate, _7d, _28d |
 | `stg_play_console_reviews` | review_id | star_rating, last_modified_at_ts, developer_reply_text, review_text |
 
 > Only `stg_play_console_crash_rate` and `stg_play_console_anr_rate` have CI columns. The other metric sets (stuck bg wakelock, excessive wakeup, error count, slow start) do not return CI bounds (verified live against the API and the raw BQ table schemas 2026-06-22).
@@ -287,7 +297,7 @@ Tables. Full refresh each run. Partitioned + clustered for query efficiency.
 
 | Model | Grain | Partition | Description |
 |---|---|---|---|
-| `mart_play_console_app_health` | date x version_code | date | FULL OUTER JOIN of crash/ANR/wakelock/wakeup rates in one wide table. CI bounds included for crash rate and ANR rate. |
+| `mart_play_console_app_health` | date x version_code x device_model x api_level x country_code | date | FULL OUTER JOIN of crash/ANR/wakelock/wakeup rates in one wide table. CI bounds included for crash rate and ANR rate. |
 | `mart_play_console_reviews` | review_id | review_date | All reviews with `has_developer_reply` and `is_negative_review` flags |
 
 ---
@@ -297,5 +307,7 @@ Tables. Full refresh each run. Partitioned + clustered for query efficiency.
 - **Metric set data lag:** Play Developer Reporting API data lags by exactly **2 days** (confirmed 2026-06-28 via live API testing). `date_to=T-1` returns HTTP 400 `end_date exceeds freshness boundary`; `date_to=T-2` returns 200. The pipeline default window (T-3 to T-2) is set to accommodate this — this window applies to all 4 sources (AppsFlyer, MoEngage, App Store, Play Console) since all share the same `DATE_FROM`/`DATE_TO` env vars injected by Cloud Workflows. The other 3 sources have no data lag; the 1-day conservatism is a deliberate trade-off to keep pipeline.yaml simple (one shared window).
 - **Reviews not date-scoped:** The reviews endpoint returns all reviews regardless of date range. Re-running produces duplicates in raw; staging deduplicates by `review_id` and `last_modified_seconds`.
 - **errorCountMetricSet requires reportType dimension:** Omitting `reportType` returns HTTP 400. This is an API constraint, not optional.
+- **errorCountMetricSet does not support countryCode:** Adding `countryCode` to this metric set returns HTTP 400 (verified live 2026-06-28). The other 5 metric sets all support `countryCode`. This is an API constraint specific to `errorCountMetricSet`.
 - **Confidence intervals only for crash rate and ANR rate:** Only `crashRateMetricSet` and `anrRateMetricSet` return CI bounds in practice (verified live and against the raw BQ table schemas 2026-06-22). Stuck bg wakelock, excessive wakeup, and slow start rate do NOT return CI columns. `errorCountMetricSet` also has no CI. The ingestion code handles both cases (only writes CI columns when the API returns them), so raw table schemas differ per metric set.
 - **SA key rotation:** Unlike API tokens, the Play Console SA key is a full JSON file. Follow the rotation procedure in `docs/runbook.md` section 7 carefully (generate new key, add to Secret Manager, delete old key from GCP IAM).
+- **Acquisition metrics (installs, users, store listing) are NOT available via REST API:** Daily Installs, Total Installs, New Users, Active Users, Store Listing Visitors, Store Listing Acquisitions, and Conversion Rate are only available via Google Play's GCS CSV export (not through the Play Developer Reporting API). Google Play automatically exports these as monthly CSV files to a private GCS bucket (`gs://pubsite_prod_rev_<account_id>/stats/installs/` and `.../stats/store_performance/`). Files are UTF-16 encoded and have a 3-7 day lag. Accessing them requires the service account to be granted bucket access via Play Console Settings. This is a separate ingestion path from the Reporting API used in this pipeline and has not been implemented. If needed in the future, implement a new source that reads from GCS instead of calling the Reporting API.

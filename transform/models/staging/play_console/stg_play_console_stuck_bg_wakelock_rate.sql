@@ -1,4 +1,4 @@
--- Staging: stuck background wakelock rate. Cast types, dedup per date x version_code (latest ingest).
+-- Staging: stuck background wakelock rate. Cast types, dedup per date x version_code x device x api_level x country (latest ingest).
 -- Data lags 2-3 days from Play Console (API constraint, not a pipeline bug).
 
 with source as (
@@ -11,6 +11,9 @@ typed as (
         aggregation_period,
         metric_set,
         safe_cast(versionCode as int64)                                 as version_code,
+        deviceModel                                                     as device_model,
+        safe_cast(apiLevel as int64)                                    as api_level,
+        countryCode                                                     as country_code,
 
         safe_cast(stuckBgWakelockRate as float64)                       as stuck_bg_wakelock_rate,
         safe_cast(stuckBgWakelockRate7dUserWeighted as float64)         as stuck_bg_wakelock_rate_7d,
@@ -28,7 +31,7 @@ deduped as (
     select *
     from typed
     qualify row_number() over (
-        partition by date, version_code
+        partition by date, version_code, device_model, api_level, country_code
         order by _ingested_at desc
     ) = 1
 )

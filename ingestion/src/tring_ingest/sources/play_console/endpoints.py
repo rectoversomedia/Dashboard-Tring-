@@ -8,20 +8,19 @@ PUBLISHER_BASE = "https://androidpublisher.googleapis.com/androidpublisher/v3"
 
 # --- Reporting API metric sets ---
 # Each entry: name, metrics list, dimensions list.
-# Verified live against the API (2026-06-22). Dimensions are the minimum required set;
-# add optional dims (deviceModel, apiLevel etc) later if needed.
+# Verified live against the API (2026-06-28).
 METRIC_SETS = [
     {
         "name": "crashRateMetricSet",
         "table": "raw_crash_rate",
         "metrics": ["crashRate", "crashRate7dUserWeighted", "crashRate28dUserWeighted"],
-        "dimensions": ["versionCode"],
+        "dimensions": ["versionCode", "deviceModel", "apiLevel", "countryCode"],
     },
     {
         "name": "anrRateMetricSet",
         "table": "raw_anr_rate",
         "metrics": ["anrRate", "anrRate7dUserWeighted", "anrRate28dUserWeighted"],
-        "dimensions": ["versionCode"],
+        "dimensions": ["versionCode", "deviceModel", "apiLevel", "countryCode"],
     },
     {
         "name": "stuckBackgroundWakelockRateMetricSet",
@@ -31,7 +30,7 @@ METRIC_SETS = [
             "stuckBgWakelockRate7dUserWeighted",
             "stuckBgWakelockRate28dUserWeighted",
         ],
-        "dimensions": ["versionCode"],
+        "dimensions": ["versionCode", "deviceModel", "apiLevel", "countryCode"],
     },
     {
         "name": "excessiveWakeupRateMetricSet",
@@ -41,20 +40,21 @@ METRIC_SETS = [
             "excessiveWakeupRate7dUserWeighted",
             "excessiveWakeupRate28dUserWeighted",
         ],
-        "dimensions": ["versionCode"],
+        "dimensions": ["versionCode", "deviceModel", "apiLevel", "countryCode"],
     },
     {
         "name": "errorCountMetricSet",
         "table": "raw_error_count",
         # requires reportType as a dimension (API constraint, verified live)
         "metrics": ["errorReportCount", "distinctUsers"],
-        "dimensions": ["reportType", "versionCode"],
+        # countryCode not supported by errorCountMetricSet (API constraint)
+        "dimensions": ["reportType", "versionCode", "deviceModel", "apiLevel"],
     },
     {
         "name": "slowStartRateMetricSet",
         "table": "raw_slow_start_rate",
         "metrics": ["slowStartRate", "slowStartRate7dUserWeighted", "slowStartRate28dUserWeighted"],
-        "dimensions": ["versionCode", "startType"],
+        "dimensions": ["versionCode", "startType", "deviceModel", "apiLevel", "countryCode"],
     },
 ]
 

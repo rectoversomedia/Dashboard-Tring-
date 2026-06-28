@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: stg_play_console_crash_rate
-    description: "Typed, deduped crash rate. One row per date x version_code (latest ingest)."
+    description: "Typed, deduped crash rate. One row per date x version_code x device_model x api_level x country_code (latest ingest)."
     columns:
       - name: date
         data_tests:
@@ -36,7 +36,7 @@ models:
                 severity: warn
 
   - name: stg_play_console_anr_rate
-    description: "Typed, deduped ANR rate. One row per date x version_code (latest ingest)."
+    description: "Typed, deduped ANR rate. One row per date x version_code x device_model x api_level x country_code (latest ingest)."
     columns:
       - name: date
         data_tests:
@@ -54,7 +54,7 @@ models:
                 severity: warn
 
   - name: stg_play_console_stuck_bg_wakelock_rate
-    description: "Typed, deduped stuck background wakelock rate. One row per date x version_code (latest ingest)."
+    description: "Typed, deduped stuck background wakelock rate. One row per date x version_code x device_model x api_level x country_code (latest ingest)."
     columns:
       - name: date
         data_tests:
@@ -72,7 +72,7 @@ models:
                 severity: warn
 
   - name: stg_play_console_excessive_wakeup_rate
-    description: "Typed, deduped excessive wakeup rate. One row per date x version_code (latest ingest)."
+    description: "Typed, deduped excessive wakeup rate. One row per date x version_code x device_model x api_level x country_code (latest ingest)."
     columns:
       - name: date
         data_tests:
@@ -90,7 +90,7 @@ models:
                 severity: warn
 
   - name: stg_play_console_error_count
-    description: "Typed, deduped error/ANR count. One row per date x report_type x version_code (latest ingest)."
+    description: "Typed, deduped error/ANR count. One row per date x report_type x version_code x device_model x api_level x country_code (latest ingest)."
     columns:
       - name: date
         data_tests:
@@ -117,7 +117,7 @@ models:
                 severity: warn
 
   - name: stg_play_console_slow_start_rate
-    description: "Typed, deduped slow start rate. One row per date x version_code x start_type (latest ingest)."
+    description: "Typed, deduped slow start rate. One row per date x version_code x start_type x device_model x api_level x country_code (latest ingest)."
     columns:
       - name: date
         data_tests:

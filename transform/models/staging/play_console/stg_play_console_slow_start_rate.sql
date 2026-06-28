@@ -1,4 +1,4 @@
--- Staging: slow start rate. Cast types, dedup per date x version_code x start_type (latest ingest).
+-- Staging: slow start rate. Cast types, dedup per date x version_code x start_type x device x api_level x country (latest ingest).
 -- startType dimension distinguishes cold/warm/hot starts.
 -- Data lags 2-3 days from Play Console (API constraint, not a pipeline bug).
 
@@ -13,6 +13,9 @@ typed as (
         metric_set,
         safe_cast(versionCode as int64)                             as version_code,
         startType                                                   as start_type,
+        deviceModel                                                 as device_model,
+        safe_cast(apiLevel as int64)                                as api_level,
+        countryCode                                                 as country_code,
 
         safe_cast(slowStartRate as float64)                         as slow_start_rate,
         safe_cast(slowStartRate7dUserWeighted as float64)           as slow_start_rate_7d,
@@ -30,7 +33,7 @@ deduped as (
     select *
     from typed
     qualify row_number() over (
-        partition by date, version_code, start_type
+        partition by date, version_code, start_type, device_model, api_level, country_code
         order by _ingested_at desc
     ) = 1
 )
