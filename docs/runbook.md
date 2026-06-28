@@ -176,6 +176,10 @@ gcloud run jobs execute dbt-transform \
 
 Raw is append-only. Staging deduplicates by latest `_ingested_at` per natural key, so re-runs are safe.
 
+> **AppsFlyer rate limit:** `in_app_events` is limited to 12 calls/day/app. Each backfill run consumes 2 calls (Android + iOS). Run at most one backfill per day and wait for UTC 00:00 (07:00 WIB) reset before the next run. `installs`, `blocked_installs`, and `master_agg` have higher limits (24/day) and are less likely to hit the cap.
+>
+> **AppsFlyer data retention:** raw event data (installs, in_app_events, blocked_installs) is only available for the last 90 days via Pull API. Requests older than 90 days return HTTP 400. `master_agg` (campaign performance) has no retention limit.
+
 **Option A  -  Backfill via Workflow (recommended  -  runs extract + dbt in sequence):**
 ```bash
 gcloud workflows run pipeline \
