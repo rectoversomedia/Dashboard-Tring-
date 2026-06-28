@@ -1,0 +1,106 @@
+# MoEngage per-day backfill workflow.
+# Loops from date_from to date_to (inclusive), triggers extract-moengage once per day, waits for each.
+# MoEngage campaign-stats API returns aggregate per window -- 1-day window per run = daily trend data.
+#
+# Usage:
+#   gcloud workflows run moengage-backfill \
+#     --data='{"date_from":"2026-01-04","date_to":"2026-01-31"}' \
+#     --location=asia-southeast2 --project=$PROJECT
+#
+# The workflow runs entirely on GCP -- laptop can be closed.
+# Each day takes ~5 min. 30 days = ~2.5 hours.
+
+main:
+  params: [args]
+  steps:
+    - init:
+        assign:
+          - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - region: "asia-southeast2"
+          - date_from: ${args.date_from}
+          - date_to: ${args.date_to}
+          # convert date strings to unix timestamps for loop math
+          - current_unix: ${time.parse(date_from + "T00:00:00Z")}
+          - end_unix: ${time.parse(date_to + "T00:00:00Z")}
+          - completed: 0
+
+    - loop:
+        switch:
+          - condition: ${current_unix > end_unix}
+            next: done
+
+    - set_current_date:
+        assign:
+          - current_date: ${text.substring(time.format(current_unix), 0, 10)}
+          - extract_body:
+              overrides:
+                containerOverrides:
+                  - env:
+                      - name: DATE_FROM
+                        value: ${current_date}
+                      - name: DATE_TO
+                        value: ${current_date}
+
+    - run_extract:
+        try:
+          call: http.post
+          args:
+            url: ${"https://run.googleapis.com/v2/projects/" + project + "/locations/" + region + "/jobs/extract-moengage:run"}
+            auth:
+              type: OAuth2
+            body: ${extract_body}
+          result: run_result
+        except:
+          as: e
+          steps:
+            - fail_start:
+                raise: ${"extract-moengage failed to start for " + current_date}
+
+    - get_execution:
+        assign:
+          - execution: ${run_result.body.metadata.name}
+
+    - poll:
+        call: http.get
+        args:
+          url: ${"https://run.googleapis.com/v2/" + execution}
+          auth:
+            type: OAuth2
+        result: poll_result
+
+    - check_state:
+        switch:
+          - condition: ${"reconciling" in poll_result.body and poll_result.body.reconciling == true}
+            steps:
+              - sleep_reconciling:
+                  call: sys.sleep
+                  args:
+                    seconds: 15
+              - retry_reconciling:
+                  next: poll
+          - condition: ${poll_result.body.conditions[0].state == "CONDITION_SUCCEEDED" and "succeededCount" in poll_result.body and poll_result.body.succeededCount == poll_result.body.taskCount}
+            steps:
+              - day_done:
+                  assign:
+                    - completed: ${completed + 1}
+                    - current_unix: ${current_unix + 86400}
+                  next: loop
+          - condition: ${poll_result.body.conditions[0].state == "CONDITION_SUCCEEDED"}
+            steps:
+              - fail_partial:
+                  raise: ${"partial failure for " + current_date}
+          - condition: ${poll_result.body.conditions[0].state == "CONDITION_FAILED"}
+            steps:
+              - fail_execution:
+                  raise: ${"execution failed for " + current_date}
+          - condition: true
+            steps:
+              - sleep:
+                  call: sys.sleep
+                  args:
+                    seconds: 15
+              - retry:
+                  next: poll
+
+    - done:
+        return: ${"Backfill complete " + date_from + " to " + date_to + " days=" + string(completed)}
