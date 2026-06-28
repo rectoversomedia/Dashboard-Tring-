@@ -13,35 +13,43 @@ Two long-lived branches:
 | `develop` | Dev GCP project | Integration testing, feature verification |
 | `main` | Prod GCP project (client) | Live production pipeline |
 
-**Never push directly to `main`.** All changes go through `develop` first.
+**Never push directly to `main` or `develop`.** All changes go through a feature branch + PR first.
 
 ---
 
 ## Development Workflow
 
+**Step 1 — Create feature branch from develop**
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/your-feature   # e.g. feature/add-appsflyer-endpoint
 ```
-1. Create feature branch from develop
-   git checkout develop
-   git pull origin develop
-   git checkout -b feature/your-feature
 
-2. Make changes + run local checks
-   make test          # 38 tests + dbt parse
-   make lint          # ruff
+**Step 2 — Make changes + run local checks**
+```bash
+make test    # 38 tests + dbt parse
+make lint    # ruff
+```
 
-3. Push feature branch + open PR to develop
-   git push origin feature/your-feature
-   # open PR: feature/* -> develop on GitHub
+**Step 3 — Push + open PR to develop**
+```bash
+git push origin feature/your-feature
+# then open PR on GitHub: base=develop <- compare=feature/your-feature
+# merge after review
+```
 
-4. After PR merged to develop:
-   - Cloud Build auto-deploys to dev GCP project
-   - Run E2E verify on dev environment (see runbook.md §1)
-   - Check dbt PASS/ERROR count in Cloud Logging
+**Step 4 — After PR merged to develop**
+- Cloud Build auto-deploys to dev GCP project
+- Run E2E verify on dev (see runbook.md §1)
+- Check dbt PASS/ERROR in Cloud Logging
 
-5. When develop is verified, open PR: develop -> main
-   - PR requires review before merge
-   - Merge to main triggers Cloud Build deploy to prod GCP
-   - NEVER merge directly via git merge — always use PR on GitHub
+**Step 5 — When develop is verified, open PR to main**
+```bash
+# on GitHub: base=main <- compare=develop
+# PR requires review before merge
+# NEVER merge directly via git merge — always use PR on GitHub
+# merge to main triggers Cloud Build deploy to prod GCP
 ```
 
 ---
