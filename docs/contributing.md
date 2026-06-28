@@ -32,24 +32,55 @@ make test    # 38 tests + dbt parse
 make lint    # ruff
 ```
 
-**Step 3 — Push + open PR to develop**
+**Step 3 — Stage, commit, push**
 ```bash
+# stage specific files (never git add -A or git add . blindly)
+git add path/to/changed/file.py
+
+# commit — pre-commit hooks run automatically (ruff, trailing whitespace, detect-secrets)
+# if ruff auto-fixes files, git add the fixed files then re-run git commit
+git commit -m "feat ingestion - describe what changed"
+
+# push to both remotes
 git push origin feature/your-feature
-# then open PR on GitHub: base=develop <- compare=feature/your-feature
-# merge after review
+git push rectoverso feature/your-feature
 ```
 
-**Step 4 — After PR merged to develop**
-- Cloud Build auto-deploys to dev GCP project
-- Run E2E verify on dev (see runbook.md §1)
-- Check dbt PASS/ERROR in Cloud Logging
+**Step 4 — Open PR: feature → develop**
 
-**Step 5 — When develop is verified, open PR to main**
+1. Go to GitHub (github.com/rectoversomedia/Dashboard-Tring-)
+2. Banner "feature/your-feature had recent pushes" → click **Compare & pull request**
+   - Or: Pull requests → New pull request → base: `develop` ← compare: `feature/your-feature`
+3. Fill title + description → click **Create pull request**
+4. Review changes → click **Merge pull request** → **Confirm merge**
+5. Delete branch after merge (GitHub will prompt)
+
+**Step 5 — Sync local develop after PR merged**
 ```bash
-# on GitHub: base=main <- compare=develop
-# PR requires review before merge
-# NEVER merge directly via git merge — always use PR on GitHub
-# merge to main triggers Cloud Build deploy to prod GCP
+git checkout develop
+git pull origin develop
+git pull rectoverso develop   # keep rectoverso in sync
+```
+
+**Step 6 — Verify on dev GCP**
+- Cloud Build auto-deploys to dev GCP (if trigger set up)
+- Or deploy manually: `gcloud builds submit . --config=cloudbuild/deploy-dev.yaml --substitutions=_PROJECT=YOUR_DEV_PROJECT,COMMIT_SHA=latest --project=YOUR_DEV_PROJECT`
+- Run E2E verify: `gcloud workflows run pipeline --location=asia-southeast2 --project=YOUR_DEV_PROJECT`
+- Check Cloud Logging for errors (see runbook.md §1)
+
+**Step 7 — Open PR: develop → main**
+
+1. Go to GitHub → Pull requests → New pull request
+   - base: `main` ← compare: `develop`
+2. Title: e.g. `release - deploy verified develop to prod`
+3. Review → **Create pull request** → **Merge pull request** → **Confirm merge**
+   - **NEVER** `git merge` directly — always use PR on GitHub
+
+**Step 8 — Sync local main after PR merged**
+```bash
+git checkout main
+git pull origin main
+git push rectoverso main   # keep rectoverso in sync
 ```
 
 ---
