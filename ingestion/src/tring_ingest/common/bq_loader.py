@@ -7,7 +7,7 @@ import io
 import uuid
 from datetime import UTC, datetime
 
-from google.api_core.exceptions import Conflict
+from google.api_core.exceptions import Conflict, NotFound
 from google.cloud import bigquery
 
 from tring_ingest.common.config import GCP_PROJECT, REGION
@@ -24,6 +24,15 @@ METADATA_COLUMNS = [
     "_extract_from",
     "_extract_to",
 ]
+
+
+def _get_existing_columns(client: bigquery.Client, table_ref: str) -> set[str] | None:
+    # returns set of column names already in the BQ table, or None if table doesn't exist yet
+    try:
+        table = client.get_table(table_ref)
+        return {f.name for f in table.schema}
+    except NotFound:
+        return None
 
 
 def _build_schema(source_columns: list[str]) -> list[bigquery.SchemaField]:
@@ -67,18 +76,29 @@ def load_csv_to_raw(
     csv_content = csv_content.lstrip("﻿")
 
     reader = csv.DictReader(io.StringIO(csv_content))
-    source_columns = reader.fieldnames or []
+    all_source_columns = reader.fieldnames or []
+
+    table_ref = f"{project_id}.{dataset_id}.{table_id}"
+    existing = _get_existing_columns(client, table_ref)
+    if existing is not None:
+        source_columns = [c for c in all_source_columns if c in existing]
+        dropped = set(all_source_columns) - set(source_columns)
+        if dropped:
+            logger.warning(f"dropping unknown columns not in BQ schema: {dropped}")
+    else:
+        source_columns = all_source_columns
 
     rows = []
     for row in reader:
-        row["_ingested_at"] = ingested_at
-        row["_source"] = source
-        row["_app_id"] = app_id
-        row["_platform"] = platform
-        row["_run_id"] = run_id
-        row["_extract_from"] = date_from
-        row["_extract_to"] = date_to
-        rows.append(row)
+        r = {col: row[col] for col in source_columns}
+        r["_ingested_at"] = ingested_at
+        r["_source"] = source
+        r["_app_id"] = app_id
+        r["_platform"] = platform
+        r["_run_id"] = run_id
+        r["_extract_from"] = date_from
+        r["_extract_to"] = date_to
+        rows.append(r)
 
     if not rows:
         logger.warning(
@@ -87,7 +107,6 @@ def load_csv_to_raw(
         )
         return 0
 
-    table_ref = f"{project_id}.{dataset_id}.{table_id}"
     schema = _build_schema(source_columns)
 
     job_config = bigquery.LoadJobConfig(
@@ -140,7 +159,17 @@ def load_json_rows_to_raw(
     with contextlib.suppress(Conflict):
         client.create_dataset(dataset_ref, exists_ok=True)
 
-    source_columns = sorted({k for row in rows for k in row})
+    all_source_columns = sorted({k for row in rows for k in row})
+    table_ref = f"{project_id}.{dataset_id}.{table_id}"
+    existing = _get_existing_columns(client, table_ref)
+    if existing is not None:
+        source_columns = [c for c in all_source_columns if c in existing]
+        dropped = set(all_source_columns) - set(source_columns)
+        if dropped:
+            logger.warning(f"dropping unknown columns not in BQ schema: {dropped}")
+    else:
+        source_columns = all_source_columns
+
     enriched = []
     for row in rows:
         r = {col: str(row.get(col, "")) for col in source_columns}
@@ -153,7 +182,6 @@ def load_json_rows_to_raw(
         r["_extract_to"] = date_to
         enriched.append(r)
 
-    table_ref = f"{project_id}.{dataset_id}.{table_id}"
     schema = _build_schema(source_columns)
 
     job_config = bigquery.LoadJobConfig(
