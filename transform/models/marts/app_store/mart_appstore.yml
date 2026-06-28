@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: mart_appstore_acquisition
+    description: "Daily acquisition funnel: downloads, app units, discovery impressions, conversion rate."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+          - unique
+      - name: conversion_rate
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+              config:
+                severity: warn
+
+  - name: mart_appstore_engagement
+    description: "Daily engagement: installs, deletions, sessions, session duration, devices."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+          - unique
+
+  - name: mart_appstore_reviews
+    description: "Customer reviews with rating flags. One row per review_id."
+    columns:
+      - name: review_id
+        data_tests:
+          - not_null
+          - unique
+      - name: review_date
+        data_tests:
+          - not_null
+      - name: rating
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+              max_value: 5
+              inclusive: true
+              config:
+                severity: warn

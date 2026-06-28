@@ -23,6 +23,9 @@ models:
       play_console:
         +tags: ["play_console", "staging"]
         +schema: play_staging
+      app_store:
+        +tags: ["app_store", "staging"]
+        +schema: appstore_staging
     marts:
       +materialized: table
       +schema: mart
@@ -79,6 +82,22 @@ models:
             field: review_date
             data_type: date
           +cluster_by: ["star_rating"]
+      app_store:
+        +tags: ["app_store", "mart"]
+        +schema: appstore_mart
+        mart_appstore_acquisition:
+          +partition_by:
+            field: date
+            data_type: date
+        mart_appstore_engagement:
+          +partition_by:
+            field: date
+            data_type: date
+        mart_appstore_reviews:
+          +partition_by:
+            field: review_date
+            data_type: date
+          +cluster_by: ["rating"]
 
 seeds:
   tring_transform:

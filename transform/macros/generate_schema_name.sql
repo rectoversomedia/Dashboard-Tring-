@@ -5,7 +5,7 @@
     {%- set default_schema = target.schema -%}
     {%- if custom_schema_name is none -%}
         {{ default_schema }}
-    {%- elif custom_schema_name.startswith('moengage_') or custom_schema_name.startswith('play_') -%}
+    {%- elif custom_schema_name.startswith('moengage_') or custom_schema_name.startswith('play_') or custom_schema_name.startswith('appstore_') -%}
         {{ custom_schema_name | trim }}
     {%- else -%}
         {{ default_schema }}_{{ custom_schema_name | trim }}

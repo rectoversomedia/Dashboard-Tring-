@@ -1,0 +1,106 @@
+version: 2
+
+models:
+  - name: stg_appstore_reviews
+    description: "Typed, deduped customer reviews. One row per review_id (latest ingest)."
+    columns:
+      - name: review_id
+        data_tests:
+          - not_null
+          - unique
+      - name: rating
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+              max_value: 5
+              inclusive: true
+              config:
+                severity: warn
+      - name: review_date
+        data_tests:
+          - not_null
+
+  - name: stg_appstore_app_downloads
+    description: "Typed, deduped app downloads. One row per date x download_type x app_version x device x source_type x page_type x territory (latest ingest)."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+      - name: download_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["First-time download", "Redownload", "Auto-update", "Manual update", "Restore"]
+              config:
+                severity: warn
+      - name: counts
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+
+  - name: stg_appstore_app_installs_deletions
+    description: "Typed, deduped installs and deletions. One row per date x event x download_type x app_version x device x source_type x territory (latest ingest)."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+      - name: event
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["Install", "Delete"]
+              config:
+                severity: warn
+      - name: counts
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+
+  - name: stg_appstore_app_sessions
+    description: "Typed, deduped app sessions. One row per date x app_version x device x source_type x territory (latest ingest)."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+      - name: sessions
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+
+  - name: stg_appstore_app_discovery_engagement
+    description: "Typed, deduped discovery and engagement. One row per date x event x page_type x source_type x engagement_type x device x territory (latest ingest)."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+      - name: event
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["Impression", "Page view", "Tap"]
+              config:
+                severity: warn
+
+  - name: stg_appstore_app_install_performance
+    description: "Typed, deduped install performance. One row per date x download_type x install_status x install_package_type x device x territory (latest ingest)."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+      - name: counts
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
