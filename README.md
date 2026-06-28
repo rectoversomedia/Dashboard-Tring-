@@ -83,6 +83,23 @@ gcloud workflows run pipeline \
 The workflow auto-computes yesterday when no dates are passed. See
 `docs/runbook.md` for backfill, log reading, token rotation, and schedule changes.
 
+## Branch Strategy
+
+Two long-lived branches:
+
+| Branch | Deploys to | Purpose |
+|---|---|---|
+| `develop` | Dev GCP project | Feature development + integration testing |
+| `main` | Prod GCP project (client) | Live production pipeline |
+
+**Why two branches?** Isolates work-in-progress from production. Changes are tested in the dev environment before reaching the client. Prevents untested code from breaking the live pipeline.
+
+**Flow:** `feature/*` → PR → `develop` (auto-deploy to dev, verify E2E) → PR → `main` (auto-deploy to prod).
+
+See `docs/contributing.md` for full workflow, commit format, and local checks.
+
+---
+
 ## Documentation
 
 | Doc | What |
