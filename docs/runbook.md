@@ -176,11 +176,23 @@ gcloud run jobs execute dbt-transform \
 
 Raw is append-only. Staging deduplicates by latest `_ingested_at` per natural key, so re-runs are safe.
 
+**Backfill availability per source:**
+
+| Source | Earliest date | Constraint |
+|---|---|---|
+| MoEngage | Any | No documented retention limit. No rate limit concern. |
+| Play Console | Any | No documented retention limit. |
+| App Store | Any | No documented retention limit. |
+| AppsFlyer `master_agg` | Any | No retention limit (aggregate data). |
+| AppsFlyer `installs`, `in_app_events`, `blocked_installs` | Last 90 days only | Pull API returns HTTP 400 for dates older than 90 days. |
+
+**Recommended approach:** backfill one month at a time per source. Run 2-3 months in parallel max to avoid hitting API rate limits. Wait for each execution to complete (SUCCEEDED) before starting the next batch.
+
 > **AppsFlyer rate limit:** `in_app_events` is limited to 12 calls/day/app. Each backfill run consumes 2 calls (Android + iOS). Run at most one backfill per day and wait for UTC 00:00 (07:00 WIB) reset before the next run. `installs`, `blocked_installs`, and `master_agg` have higher limits (24/day) and are less likely to hit the cap.
 >
 > **AppsFlyer data retention:** raw event data (installs, in_app_events, blocked_installs) is only available for the last 90 days via Pull API. Requests older than 90 days return HTTP 400. `master_agg` (campaign performance) has no retention limit.
 
-**Option A  -  Backfill via Workflow (recommended  -  runs extract + dbt in sequence):**
+**Option A  -  Backfill via Workflow (recommended  -  runs all sources + dbt in sequence):**
 ```bash
 gcloud workflows run pipeline \
   --data='{"date_from":"2026-05-01","date_to":"2026-05-31"}' \
@@ -188,15 +200,44 @@ gcloud workflows run pipeline \
   --project=$PROJECT
 ```
 
-**Option B  -  Backfill extract only (manual, bypass Workflow):**
+> Use Option A when you want all sources backfilled for the same date range in one shot. dbt runs automatically after all extracts succeed.
+
+**Option B  -  Backfill one source at a time (bypass Workflow):**
+
+Use this when sources need different date ranges, or you want to avoid triggering AppsFlyer (rate limit concern).
+
 ```bash
+# MoEngage - no rate limit, safe to run per month
+gcloud run jobs execute extract-moengage \
+  --region=asia-southeast2 \
+  --project=$PROJECT \
+  --update-env-vars="DATE_FROM=2026-01-01,DATE_TO=2026-01-31"
+
+# Play Console
+gcloud run jobs execute extract-play-console \
+  --region=asia-southeast2 \
+  --project=$PROJECT \
+  --update-env-vars="DATE_FROM=2026-01-01,DATE_TO=2026-01-31"
+
+# App Store
+gcloud run jobs execute extract-app-store \
+  --region=asia-southeast2 \
+  --project=$PROJECT \
+  --update-env-vars="DATE_FROM=2026-01-01,DATE_TO=2026-01-31"
+
+# AppsFlyer (max 1 run/day due to in_app_events rate limit)
 gcloud run jobs execute extract-appsflyer \
   --region=asia-southeast2 \
   --project=$PROJECT \
   --update-env-vars="DATE_FROM=2026-05-01,DATE_TO=2026-05-31"
 ```
 
-After Option B extract completes, run dbt manually:
+Check execution status:
+```bash
+gcloud run jobs executions list --job=extract-moengage --region=asia-southeast2 --project=$PROJECT --limit=3
+```
+
+After all extracts complete, run dbt:
 ```bash
 gcloud run jobs execute dbt-transform \
   --region=asia-southeast2 \
