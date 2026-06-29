@@ -224,6 +224,29 @@ Multiple job executions during OOM debugging consumed the 12-call daily quota fo
 
 ---
 
+## AppsFlyer Pull API Data Availability Window
+
+Source: https://support.appsflyer.com/hc/en-us/articles/4415473374865-Data-availability-windows
+
+Raw data endpoints (`installs`, `in_app_events`, `blocked_installs`) are only available for the **last 90 days** via Pull API. Requests older than 90 days return HTTP 400.
+
+| Endpoint | Availability window |
+|---|---|
+| installs | Last 90 days |
+| in_app_events | Last 90 days |
+| blocked_installs | Last 90 days |
+| master_agg (campaign performance) | No limit (aggregate data) |
+
+**Important distinction:** AppsFlyer retains the data on their servers longer than 90 days, but the Pull API cannot query beyond that window regardless of plan.
+
+**Backfill implication:** backfill must be run within the 90-day window from the date the pipeline first goes live. Once data is older than 90 days it is permanently inaccessible via Pull API.
+
+**To remove this limitation:** upgrade to AppsFlyer Enterprise and use **Data Locker** - raw event data is pushed directly to GCS/S3 with no window constraint and no per-call quotas. Requires contacting an AppsFlyer Account Executive. Not applicable to Pull API regardless of plan.
+
+**To increase rate limits only (not the 90-day window):** contact AppsFlyer Account Executive to negotiate higher daily quotas.
+
+---
+
 ## Known Issues
 
 ### in_app_events Android  -  Rate Limit Hit During Dev (RESOLVED next UTC 00:00)
