@@ -177,7 +177,7 @@ The Play Console secret stores a service account key JSON. This is the one case 
 - **Your pipeline project** (`$PROJECT`) - where this secret lives.
 - **The Play Console source project** (`pgd-prd-digital-rating-tring`) - which owns the SA `dashboard-monitoring-aiinsight@pgd-prd-digital-rating-tring.iam.gserviceaccount.com`. That SA already has Play Developer Reporting API and Android Publisher API access granted via Google Play Console. You do not create a new SA and you do not touch the Play Console UI.
 
-> **Play Console access is tied to a specific SA email.** The SA `dashboard-monitoring-aiinsight@pgd-prd-digital-rating-tring.iam.gserviceaccount.com` has already been invited to Google Play Console for the app **Tring! by Pegadaian** (`com.pegadaiandigital`). If you ever need to use a different SA, you must invite it to Play Console first — generating a key and loading it into Secret Manager is not enough on its own.
+> **Play Console access is tied to a specific SA email.** The SA `dashboard-monitoring-aiinsight@pgd-prd-digital-rating-tring.iam.gserviceaccount.com` has already been invited to Google Play Console for the app **Tring! by Pegadaian** (`com.pegadaiandigital`). If you ever need to use a different SA, you must invite it to Play Console first - generating a key and loading it into Secret Manager is not enough on its own.
 >
 > **To invite a new SA to Play Console:**
 > 1. Go to [play.google.com/console](https://play.google.com/console) and open the Tring! by Pegadaian app.
@@ -315,22 +315,22 @@ Or use the simpler IAM binding (if sa-dbt already has project-level bigquery.dat
 
 ---
 
-## 7. Build and Push Container Images
+## 7. Build and Push Container Image
 
 No Docker Desktop required. All builds run inside Cloud Build on GCP - nothing runs on your laptop.
 
 There are two Cloud Build config files in `cloudbuild/`:
-- `build-push.yaml` - used here (Section 7). Builds both Docker images and pushes them to Artifact Registry. Does NOT deploy or touch Cloud Run Jobs.
-- `deploy-prod.yaml` - used by the automated CI/CD trigger (handover.md Steps 4-5). Builds images AND rolls them onto the existing Cloud Run Jobs. Used after the jobs are created. Note: `_ENV` substitution was removed from this file — do not pass `_ENV` when calling it manually. When running manually (no git trigger), `COMMIT_SHA` is empty so you must pass it explicitly: `--substitutions="_PROJECT=${PROJECT},COMMIT_SHA=latest"`.
+- `build-push.yaml` - used here (Section 7). Builds the single pipeline image and pushes it to Artifact Registry. Does NOT deploy or touch Cloud Run Jobs.
+- `deploy-prod.yaml` - used by the automated CI/CD trigger (handover.md Steps 4-5). Builds the image AND rolls it onto all existing Cloud Run Jobs. Used after the jobs are created. When running manually (no git trigger), `COMMIT_SHA` is empty so pass it explicitly: `--substitutions="_PROJECT=${PROJECT},COMMIT_SHA=latest"`.
 
-You use `build-push.yaml` here because the Cloud Run Jobs do not exist yet - they are created in Section 8 using these images.
+You use `build-push.yaml` here because the Cloud Run Jobs do not exist yet - they are created in Section 8 using this image.
 
 **One-time auth (allow gcloud to push to Artifact Registry):**
 ```bash
 gcloud auth configure-docker asia-southeast2-docker.pkg.dev --project=$PROJECT
 ```
 
-**Build both images and push:**
+**Build image and push:**
 ```bash
 gcloud builds submit . \
   --config=cloudbuild/build-push.yaml \
@@ -338,20 +338,21 @@ gcloud builds submit . \
   --project=$PROJECT
 ```
 
-This builds `ingestion/Dockerfile` (used by all 3 extract jobs) and `transform/Dockerfile` (used by dbt-transform), then pushes them to:
+This builds the root `Dockerfile` (contains both ingestion Python package and dbt) and pushes to:
 ```
-asia-southeast2-docker.pkg.dev/${PROJECT}/tring-service/ingestion:latest
-asia-southeast2-docker.pkg.dev/${PROJECT}/tring-service/dbt:latest
+asia-southeast2-docker.pkg.dev/${PROJECT}/tring-service/pipeline:latest
 ```
 
-The command uploads your local code to Cloud Build and streams build logs. It takes 3-5 minutes. A `SUCCESS` at the end means both images are ready in Artifact Registry.
+The image has no ENTRYPOINT. Each Cloud Run Job must set `--command` and `--args` explicitly (done in Section 8).
 
-**Verify images are there:**
+The command uploads your local code to Cloud Build and streams build logs. It takes 5-8 minutes. A `SUCCESS` at the end means the image is ready in Artifact Registry.
+
+**Verify image is there:**
 ```bash
 gcloud artifacts docker images list asia-southeast2-docker.pkg.dev/${PROJECT}/tring-service --project=$PROJECT
 ```
 
-You should see two image paths: one for `ingestion`, one for `dbt`.
+You should see one image path: `pipeline`.
 
 ---
 
@@ -359,13 +360,18 @@ You should see two image paths: one for `ingestion`, one for `dbt`.
 
 > **Note on date args:** dates are not set at job creation. Cloud Workflows injects them at runtime via `containerOverrides.env` (`DATE_FROM`/`DATE_TO`). For manual backfill, use `gcloud run jobs execute` with `--update-env-vars="DATE_FROM=...,DATE_TO=..."` (see runbook section 3).
 
+> **IMPORTANT - no ENTRYPOINT in image:** The `pipeline` image has no ENTRYPOINT. Every job MUST set `--command` and `--args`. A job created without them will not know what to run and will fail at runtime, not at deploy time.
+
+> **dbt profiles dir:** The `dbt-transform` job uses `DBT_PROFILES_DIR=/app/transform` env var instead of passing `--profiles-dir` in args. This is required because gcloud parses multiple `--*dir` flags inside `--args` incorrectly. Do not change this.
+
 ```bash
 REGISTRY=asia-southeast2-docker.pkg.dev
 
+# All 5 jobs use the same pipeline image. Each sets --command and --args for its workload.
+
 # extract-appsflyer
-# --command and --args set the entrypoint; dates are injected by Workflow at runtime
 gcloud run jobs create extract-appsflyer \
-  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
   --region=asia-southeast2 \
   --service-account=sa-extract-appsflyer@${PROJECT}.iam.gserviceaccount.com \
   --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET_RAW=appsflyer_raw,REGION=asia-southeast2" \
@@ -376,9 +382,9 @@ gcloud run jobs create extract-appsflyer \
   --cpu=2 \
   --project=$PROJECT
 
-# extract-moengage (same ingestion image, different --source arg)
+# extract-moengage
 gcloud run jobs create extract-moengage \
-  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
   --region=asia-southeast2 \
   --service-account=sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com \
   --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET_RAW_MOENGAGE=moengage_raw,REGION=asia-southeast2" \
@@ -390,12 +396,10 @@ gcloud run jobs create extract-moengage \
   --max-retries=0 \
   --project=$PROJECT
 
-# extract-play-console (same ingestion image, --source play_console)
+# extract-play-console
 # PLAY_CONSOLE_SECRET_NAME tells config.py which Secret Manager secret to fetch the SA key JSON from.
-# The code (config.py) reads this env var as the *name* of the secret, then calls Secret Manager API
-# to fetch the actual key content at runtime. Default is "play-console-sa-key" (matches secret created in Section 4).
 gcloud run jobs create extract-play-console \
-  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
   --region=asia-southeast2 \
   --service-account=sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com \
   --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET_RAW_PLAY_CONSOLE=play_raw,REGION=asia-southeast2,PLAY_CONSOLE_SECRET_NAME=play-console-sa-key" \
@@ -406,10 +410,9 @@ gcloud run jobs create extract-play-console \
   --max-retries=0 \
   --project=$PROJECT
 
-# extract-app-store: two secrets accessed at runtime via Secret Manager client (not injected directly).
-# ONGOING analytics request ID override via env var if the request is ever recreated.
+# extract-app-store
 gcloud run jobs create extract-app-store \
-  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
   --region=asia-southeast2 \
   --service-account=sa-extract-app-store@${PROJECT}.iam.gserviceaccount.com \
   --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET_RAW_APPSTORE=appstore_raw,REGION=asia-southeast2,APPSTORE_SECRET_NAME=appstore-connect-key,APPSTORE_APP_ID=1350501409" \
@@ -421,13 +424,14 @@ gcloud run jobs create extract-app-store \
   --project=$PROJECT
 
 # dbt-transform
-# ENTRYPOINT is hardcoded in Dockerfile: ["dbt", "build", "--profiles-dir", "/app", "--target", "prod"]
-# Do NOT set --command or --args here  -  they override the Dockerfile ENTRYPOINT and break dbt
+# DBT_PROFILES_DIR env var tells dbt where profiles.yml is (avoids --profiles-dir in args).
 gcloud run jobs create dbt-transform \
-  --image=${REGISTRY}/${PROJECT}/tring-service/dbt:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
   --region=asia-southeast2 \
   --service-account=sa-dbt@${PROJECT}.iam.gserviceaccount.com \
-  --set-env-vars="GCP_PROJECT=${PROJECT}" \
+  --set-env-vars="GCP_PROJECT=${PROJECT},DBT_PROFILES_DIR=/app/transform" \
+  --command=dbt \
+  --args="build,--project-dir,/app/transform,--target,prod,--target-path,/tmp/dbt-target" \
   --project=$PROJECT
 ```
 
@@ -469,7 +473,7 @@ gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name=
   --format="table(timestamp,textPayload)"
 ```
 
-**Rebuild images and update jobs after code change:**
+**Rebuild image and update all jobs after code change:**
 ```bash
 gcloud builds submit . \
   --config=cloudbuild/build-push.yaml \
@@ -477,27 +481,38 @@ gcloud builds submit . \
   --project=$PROJECT
 
 gcloud run jobs update extract-appsflyer \
-  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
+  --command=python \
+  --args="-m,tring_ingest,--source,appsflyer" \
   --region=asia-southeast2 \
   --project=$PROJECT
 
 gcloud run jobs update extract-moengage \
-  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
+  --command=python \
+  --args="-m,tring_ingest,--source,moengage" \
   --region=asia-southeast2 \
   --project=$PROJECT
 
 gcloud run jobs update extract-play-console \
-  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
+  --command=python \
+  --args="-m,tring_ingest,--source,play_console" \
   --region=asia-southeast2 \
   --project=$PROJECT
 
 gcloud run jobs update extract-app-store \
-  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
+  --command=python \
+  --args="-m,tring_ingest,--source,app_store" \
   --region=asia-southeast2 \
   --project=$PROJECT
 
 gcloud run jobs update dbt-transform \
-  --image=${REGISTRY}/${PROJECT}/tring-service/dbt:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
+  --command=dbt \
+  --args="build,--project-dir,/app/transform,--target,prod,--target-path,/tmp/dbt-target" \
+  --update-env-vars=DBT_PROFILES_DIR=/app/transform \
   --region=asia-southeast2 \
   --project=$PROJECT
 ```
@@ -565,7 +580,7 @@ Run the pipeline manually to confirm the full setup works end-to-end.
 gcloud workflows run pipeline --location=asia-southeast2 --project=$PROJECT
 ```
 
-**Recommended for first run — use an explicit date range to verify with known data:**
+**Recommended for first run - use an explicit date range to verify with known data:**
 ```bash
 gcloud workflows run pipeline \
   --data='{"date_from":"2026-06-01","date_to":"2026-06-15"}' \
@@ -577,7 +592,7 @@ A full run takes 6–10 minutes. Check the result:
 gcloud workflows executions list pipeline --location=asia-southeast2 --project=$PROJECT --limit=5
 ```
 
-`state: SUCCEEDED` means everything worked. `state: FAILED` — check logs:
+`state: SUCCEEDED` means everything worked. `state: FAILED` - check logs:
 ```bash
 gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="extract-appsflyer"' \
   --project=$PROJECT --limit=30 --order=desc --format="table(timestamp,textPayload)"

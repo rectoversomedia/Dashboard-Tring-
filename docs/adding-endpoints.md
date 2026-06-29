@@ -54,7 +54,7 @@ File: `ingestion/src/tring_ingest/sources/appsflyer/endpoints.py`
 
    ```bash
    gcloud builds submit . --config=cloudbuild/build-push.yaml --substitutions="_PROJECT=$PROJECT"
-   gcloud run jobs update extract-appsflyer --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/ingestion:latest --region=asia-southeast2 --project=$PROJECT
+   gcloud run jobs update extract-appsflyer --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/pipeline:latest --command=python --args="-m,tring_ingest,--source,appsflyer" --region=asia-southeast2 --project=$PROJECT
    ```
 
    On client prod this happens automatically: a push triggers Cloud Build, which
@@ -91,7 +91,7 @@ File: `ingestion/src/tring_ingest/sources/play_console/endpoints.py`
 4. Rebuild + redeploy, but the job is `extract-play-console`:
 
    ```bash
-   gcloud run jobs update extract-play-console --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/ingestion:latest --region=asia-southeast2 --project=$PROJECT
+   gcloud run jobs update extract-play-console --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/pipeline:latest --command=python --args="-m,tring_ingest,--source,play_console" --region=asia-southeast2 --project=$PROJECT
    ```
 
 > Reviews (Publisher API) are a separate fixed call, not part of `METRIC_SETS`.
@@ -130,7 +130,7 @@ campaigns, then fetch stats). Adding an endpoint means adding a step.
 4. Rebuild + redeploy `extract-moengage`:
 
    ```bash
-   gcloud run jobs update extract-moengage --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/ingestion:latest --region=asia-southeast2 --project=$PROJECT
+   gcloud run jobs update extract-moengage --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/pipeline:latest --command=python --args="-m,tring_ingest,--source,moengage" --region=asia-southeast2 --project=$PROJECT
    ```
 
 ---

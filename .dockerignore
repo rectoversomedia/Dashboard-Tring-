@@ -1,0 +1,46 @@
+# Python caches and build artifacts
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+**/.ruff_cache/
+**/.pytest_cache/
+**/dist/
+**/build/
+
+# virtual envs
+**/.venv/
+**/venv/
+
+# tests not needed in runtime image
+**/tests/
+
+# dbt local state (regenerated inside image by dbt deps)
+transform/target/
+transform/dbt_packages/
+transform/logs/
+transform/.user.yml
+
+# git and CI
+.git/
+.github/
+.pre-commit-config.yaml
+
+# secrets - never bake into image
+.env
+*.json
+*.pem
+*.p12
+*.key
+
+# OS / IDE noise
+.DS_Store
+**/*.swp
+.idea/
+.vscode/
+
+# other repo files not needed in image
+infra/
+test-appstore/
+docs/
+cloudbuild/
+orchestration/

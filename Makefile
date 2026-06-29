@@ -1,22 +1,16 @@
 SHELL := /bin/bash
 ENV ?= dev
 REGION ?= asia-southeast2
-# Set per environment. No default project IDs are baked in  -  the GCP project differs per env
-# (consultant dev vs client prod). Set via env var or make arg:
-#   make deploy ENV=prod PROJECT_PROD=your-client-prod-project
-#   make run-appsflyer-local PROJECT=your-dev-project
+# No default project IDs. Pass via env var: make deploy ENV=prod PROJECT_PROD=your-client-prod-project
 PROJECT_DEV ?=
 PROJECT_PROD ?=
 REGISTRY ?= $(REGION)-docker.pkg.dev
 REPO ?= tring-service
 
 PROJECT ?= $(if $(filter prod,$(ENV)),$(PROJECT_PROD),$(PROJECT_DEV))
-IMAGE_INGESTION := $(REGISTRY)/$(PROJECT)/$(REPO)/ingestion
-IMAGE_DBT := $(REGISTRY)/$(PROJECT)/$(REPO)/dbt
+IMAGE_PIPELINE := $(REGISTRY)/$(PROJECT)/$(REPO)/pipeline
 
-# Guard: any target that talks to GCP must depend on `require-project` so an unset
-# PROJECT fails fast with a clear message instead of building a broken //repo path.
-# Lint/test/local targets do NOT require it.
+# Guard: GCP targets depend on this so an unset PROJECT fails fast with a clear message.
 require-project:
 	@test -n "$(PROJECT)" || { echo "ERROR: PROJECT is not set. Pass PROJECT=your-gcp-project (or PROJECT_DEV / PROJECT_PROD) - no default project is baked in."; exit 1; }
 
@@ -25,8 +19,7 @@ TO ?= $(shell date -u +%Y-%m-%d)
 
 .PHONY: setup lint test \
 	require-project \
-	build-ingestion build-dbt \
-	push-ingestion push-dbt \
+	build push \
 	tf-init tf-plan tf-apply \
 	create-appsflyer create-moengage create-play-console create-app-store create-dbt \
 	deploy-appsflyer deploy-moengage deploy-play-console deploy-app-store deploy-dbt deploy-workflow deploy-scheduler \
@@ -53,21 +46,13 @@ test:
 	# to be non-empty so profiles.yml resolves. Matches ci.yaml's GCP_PROJECT=ci-placeholder.
 	cd transform && GCP_PROJECT=$${GCP_PROJECT:-ci-placeholder} dbt parse --profiles-dir .
 
-# -- Docker build --------------------------------------------------------------
+# -- Docker build + push -------------------------------------------------------
 
-build-ingestion:
-	docker build -t $(IMAGE_INGESTION):latest ingestion/
+build:
+	docker build -t $(IMAGE_PIPELINE):latest .
 
-build-dbt:
-	docker build -t $(IMAGE_DBT):latest transform/
-
-# -- Docker push ---------------------------------------------------------------
-
-push-ingestion: require-project build-ingestion
-	docker push $(IMAGE_INGESTION):latest
-
-push-dbt: require-project build-dbt
-	docker push $(IMAGE_DBT):latest
+push: require-project build
+	docker push $(IMAGE_PIPELINE):latest
 
 # -- Terraform -----------------------------------------------------------------
 
@@ -80,15 +65,14 @@ tf-plan:
 tf-apply:
 	terraform -chdir=infra/envs/$(ENV) apply -var-file=terraform.tfvars -auto-approve
 
-# -- Cloud Run Job deploy ------------------------------------------------------
-# create-* = first-time job creation (run once per env)
-# deploy-* = update existing job after new image push
+# -- Cloud Run Job deploy (create-* = first-time, deploy-* = update existing job) --
 
-# extract-appsflyer: --command/--args set the entrypoint; dates come from DATE_FROM/DATE_TO
-# env vars injected at runtime by Cloud Workflows (or --update-env-vars on manual execute).
+# All jobs use IMAGE_PIPELINE. Each must set --command/--args (image has no ENTRYPOINT).
+# Dates (DATE_FROM/DATE_TO) are injected at runtime by Cloud Workflows.
+
 create-appsflyer: require-project
 	gcloud run jobs create extract-appsflyer \
-		--image $(IMAGE_INGESTION):latest \
+		--image $(IMAGE_PIPELINE):latest \
 		--region $(REGION) \
 		--project $(PROJECT) \
 		--set-env-vars GCP_PROJECT=$(PROJECT),BQ_DATASET_RAW=appsflyer_raw,REGION=$(REGION) \
@@ -97,10 +81,9 @@ create-appsflyer: require-project
 		--command python \
 		--args "-m,tring_ingest,--source,appsflyer"
 
-# extract-moengage: secret value (WORKSPACE_ID:API_KEY) added out of band, see gcp-setup.md.
 create-moengage: require-project
 	gcloud run jobs create extract-moengage \
-		--image $(IMAGE_INGESTION):latest \
+		--image $(IMAGE_PIPELINE):latest \
 		--region $(REGION) \
 		--project $(PROJECT) \
 		--set-env-vars GCP_PROJECT=$(PROJECT),BQ_DATASET_RAW_MOENGAGE=moengage_raw,REGION=$(REGION) \
@@ -109,12 +92,10 @@ create-moengage: require-project
 		--command python \
 		--args "-m,tring_ingest,--source,moengage"
 
-# extract-play-console: PLAY_CONSOLE_SECRET_NAME tells config.py which Secret Manager secret to fetch
-# the SA key JSON from. The code reads this as a secret *name*, then calls Secret Manager API at runtime.
-# SA key JSON comes from pgd-prd-digital-rating-tring. See gcp-setup.md / data-catalog-play-console.md.
+# PLAY_CONSOLE_SECRET_NAME tells config.py which Secret Manager secret holds the SA key JSON.
 create-play-console: require-project
 	gcloud run jobs create extract-play-console \
-		--image $(IMAGE_INGESTION):latest \
+		--image $(IMAGE_PIPELINE):latest \
 		--region $(REGION) \
 		--project $(PROJECT) \
 		--set-env-vars GCP_PROJECT=$(PROJECT),BQ_DATASET_RAW_PLAY_CONSOLE=play_raw,REGION=$(REGION),PLAY_CONSOLE_SECRET_NAME=play-console-sa-key \
@@ -122,10 +103,9 @@ create-play-console: require-project
 		--command python \
 		--args "-m,tring_ingest,--source,play_console"
 
-# extract-app-store: two secrets (key+p8) accessed at runtime via Secret Manager client, not injected directly
 create-app-store: require-project
 	gcloud run jobs create extract-app-store \
-		--image $(IMAGE_INGESTION):latest \
+		--image $(IMAGE_PIPELINE):latest \
 		--region $(REGION) \
 		--project $(PROJECT) \
 		--set-env-vars GCP_PROJECT=$(PROJECT),BQ_DATASET_RAW_APPSTORE=appstore_raw,REGION=$(REGION),APPSTORE_SECRET_NAME=appstore-connect-key,APPSTORE_APP_ID=1350501409 \
@@ -133,43 +113,55 @@ create-app-store: require-project
 		--command python \
 		--args "-m,tring_ingest,--source,app_store"
 
-# dbt-transform: NO --command/--args. The Dockerfile ENTRYPOINT runs
-# `dbt build --profiles-dir /app --target prod`. Overriding it here would break dbt.
+# DBT_PROFILES_DIR avoids --profiles-dir in args (gcloud parse error with multiple --*dir flags).
 create-dbt: require-project
 	gcloud run jobs create dbt-transform \
-		--image $(IMAGE_DBT):latest \
+		--image $(IMAGE_PIPELINE):latest \
 		--region $(REGION) \
 		--project $(PROJECT) \
-		--set-env-vars GCP_PROJECT=$(PROJECT) \
-		--service-account sa-dbt@$(PROJECT).iam.gserviceaccount.com
+		--set-env-vars GCP_PROJECT=$(PROJECT),DBT_PROFILES_DIR=/app/transform \
+		--service-account sa-dbt@$(PROJECT).iam.gserviceaccount.com \
+		--command dbt \
+		--args "build,--project-dir,/app/transform,--target,prod,--target-path,/tmp/dbt-target"
 
 deploy-appsflyer: require-project
 	gcloud run jobs update extract-appsflyer \
-		--image $(IMAGE_INGESTION):latest \
+		--image $(IMAGE_PIPELINE):latest \
+		--command python \
+		--args "-m,tring_ingest,--source,appsflyer" \
 		--region $(REGION) \
 		--project $(PROJECT)
 
 deploy-moengage: require-project
 	gcloud run jobs update extract-moengage \
-		--image $(IMAGE_INGESTION):latest \
+		--image $(IMAGE_PIPELINE):latest \
+		--command python \
+		--args "-m,tring_ingest,--source,moengage" \
 		--region $(REGION) \
 		--project $(PROJECT)
 
 deploy-play-console: require-project
 	gcloud run jobs update extract-play-console \
-		--image $(IMAGE_INGESTION):latest \
+		--image $(IMAGE_PIPELINE):latest \
+		--command python \
+		--args "-m,tring_ingest,--source,play_console" \
 		--region $(REGION) \
 		--project $(PROJECT)
 
 deploy-app-store: require-project
 	gcloud run jobs update extract-app-store \
-		--image $(IMAGE_INGESTION):latest \
+		--image $(IMAGE_PIPELINE):latest \
+		--command python \
+		--args "-m,tring_ingest,--source,app_store" \
 		--region $(REGION) \
 		--project $(PROJECT)
 
 deploy-dbt: require-project
 	gcloud run jobs update dbt-transform \
-		--image $(IMAGE_DBT):latest \
+		--image $(IMAGE_PIPELINE):latest \
+		--command dbt \
+		--args "build,--project-dir,/app/transform,--target,prod,--target-path,/tmp/dbt-target" \
+		--update-env-vars DBT_PROFILES_DIR=/app/transform \
 		--region $(REGION) \
 		--project $(PROJECT)
 
@@ -208,10 +200,8 @@ run-appsflyer-local: require-project
 		--from $(FROM) \
 		--to $(TO)
 
-# -- Cloud Run Job manual execute ----------------------------------------------
-# Triggers an existing Cloud Run Job on GCP (no Docker required).
-# Usage: make run-appsflyer PROJECT=your-project
-#        make run-appsflyer PROJECT=your-project FROM=2026-01-01 TO=2026-06-28
+# -- Cloud Run Job manual execute (triggers existing job on GCP, no Docker required) --
+# Usage: make run-appsflyer PROJECT=your-project [FROM=2026-01-01 TO=2026-06-28]
 
 run-appsflyer: require-project
 	gcloud run jobs execute extract-appsflyer \
@@ -246,9 +236,7 @@ run-pipeline: require-project
 		--location $(REGION) \
 		--project $(PROJECT)
 
-# -- Cloud Build deploy (no Docker Desktop required) --------------------------
-# Builds images in Cloud Build and deploys all jobs. Use instead of `make deploy`
-# when Docker is not available locally.
+# -- Cloud Build deploy (no Docker Desktop needed; builds in Cloud Build and deploys all jobs) --
 
 cloudbuild-deploy-prod: require-project
 	gcloud builds submit . \
@@ -262,9 +250,7 @@ cloudbuild-deploy-dev: require-project
 		--substitutions="_PROJECT=$(PROJECT),COMMIT_SHA=latest" \
 		--project=$(PROJECT)
 
-# -- Full deploy ---------------------------------------------------------------
-# Rolls new images onto EXISTING jobs. The jobs/workflow/scheduler are created once
-# via the create-* targets (or docs/gcp-setup.md steps 8-10). No Terraform.
+# -- Full deploy (rolls new image onto existing jobs; jobs must already exist via create-* targets) --
 
-deploy: require-project push-ingestion push-dbt deploy-appsflyer deploy-moengage deploy-play-console deploy-app-store deploy-dbt deploy-workflow deploy-scheduler
+deploy: require-project push deploy-appsflyer deploy-moengage deploy-play-console deploy-app-store deploy-dbt deploy-workflow deploy-scheduler
 	@echo "Deploy to $(ENV) complete."

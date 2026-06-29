@@ -6,30 +6,17 @@ substitutions:
 
 steps:
   - name: "gcr.io/cloud-builders/docker"
-    id: build-ingestion
+    id: build-pipeline
     args:
       - build
       - -t
-      - ${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion:${_TAG}
-      - ingestion/
+      - ${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline:${_TAG}
+      - .
 
   - name: "gcr.io/cloud-builders/docker"
-    id: build-dbt
-    args:
-      - build
-      - -t
-      - ${_REGISTRY}/${_PROJECT}/${_REPO}/dbt:${_TAG}
-      - transform/
-
-  - name: "gcr.io/cloud-builders/docker"
-    id: push-ingestion
-    args: ["push", "${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion:${_TAG}"]
-    waitFor: ["build-ingestion"]
-
-  - name: "gcr.io/cloud-builders/docker"
-    id: push-dbt
-    args: ["push", "${_REGISTRY}/${_PROJECT}/${_REPO}/dbt:${_TAG}"]
-    waitFor: ["build-dbt"]
+    id: push-pipeline
+    args: ["push", "${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline:${_TAG}"]
+    waitFor: ["build-pipeline"]
 
 options:
   logging: CLOUD_LOGGING_ONLY
