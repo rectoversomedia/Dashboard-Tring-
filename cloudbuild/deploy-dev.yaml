@@ -6,37 +6,22 @@ substitutions:
 
 steps:
   - name: "gcr.io/cloud-builders/docker"
-    id: build-ingestion
+    id: build-pipeline
     args:
       - build
       - -t
-      - ${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion:$COMMIT_SHA
+      - ${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline:$COMMIT_SHA
       - -t
-      - ${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion:latest
-      - ingestion/
+      - ${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline:latest
+      - .
 
   - name: "gcr.io/cloud-builders/docker"
-    id: build-dbt
-    args:
-      - build
-      - -t
-      - ${_REGISTRY}/${_PROJECT}/${_REPO}/dbt:$COMMIT_SHA
-      - -t
-      - ${_REGISTRY}/${_PROJECT}/${_REPO}/dbt:latest
-      - transform/
+    id: push-pipeline
+    args: ["push", "--all-tags", "${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline"]
+    waitFor: ["build-pipeline"]
 
-  - name: "gcr.io/cloud-builders/docker"
-    id: push-ingestion
-    args: ["push", "--all-tags", "${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion"]
-    waitFor: ["build-ingestion"]
-
-  - name: "gcr.io/cloud-builders/docker"
-    id: push-dbt
-    args: ["push", "--all-tags", "${_REGISTRY}/${_PROJECT}/${_REPO}/dbt"]
-    waitFor: ["build-dbt"]
-
-  # Jobs/workflow/scheduler are created once via gcloud (docs/gcp-setup.md steps 8-10).
-  # Cloud Build only rolls the new image onto the existing jobs. No Terraform.
+  # All 5 jobs use the same single image. Each job must set --command and --args
+  # because the image has no ENTRYPOINT.
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-appsflyer-job
     entrypoint: gcloud
@@ -45,10 +30,12 @@ steps:
       - jobs
       - update
       - extract-appsflyer
-      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion:$COMMIT_SHA
+      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline:$COMMIT_SHA
+      - --command=python
+      - --args=-m,tring_ingest,--source,appsflyer
       - --region=${_REGION}
       - --project=${_PROJECT}
-    waitFor: ["push-ingestion"]
+    waitFor: ["push-pipeline"]
 
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-moengage-job
@@ -58,10 +45,12 @@ steps:
       - jobs
       - update
       - extract-moengage
-      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion:$COMMIT_SHA
+      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline:$COMMIT_SHA
+      - --command=python
+      - --args=-m,tring_ingest,--source,moengage
       - --region=${_REGION}
       - --project=${_PROJECT}
-    waitFor: ["push-ingestion"]
+    waitFor: ["push-pipeline"]
 
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-play-console-job
@@ -71,10 +60,12 @@ steps:
       - jobs
       - update
       - extract-play-console
-      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion:$COMMIT_SHA
+      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline:$COMMIT_SHA
+      - --command=python
+      - --args=-m,tring_ingest,--source,play_console
       - --region=${_REGION}
       - --project=${_PROJECT}
-    waitFor: ["push-ingestion"]
+    waitFor: ["push-pipeline"]
 
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-app-store-job
@@ -84,10 +75,12 @@ steps:
       - jobs
       - update
       - extract-app-store
-      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/ingestion:$COMMIT_SHA
+      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline:$COMMIT_SHA
+      - --command=python
+      - --args=-m,tring_ingest,--source,app_store
       - --region=${_REGION}
       - --project=${_PROJECT}
-    waitFor: ["push-ingestion"]
+    waitFor: ["push-pipeline"]
 
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-dbt-job
@@ -97,10 +90,13 @@ steps:
       - jobs
       - update
       - dbt-transform
-      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/dbt:$COMMIT_SHA
+      - --image=${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline:$COMMIT_SHA
+      - --command=dbt
+      - --args=build,--project-dir,/app/transform,--target,prod,--target-path,/tmp/dbt-target
+      - --update-env-vars=DBT_PROFILES_DIR=/app/transform
       - --region=${_REGION}
       - --project=${_PROJECT}
-    waitFor: ["push-dbt"]
+    waitFor: ["push-pipeline"]
 
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -205,7 +205,7 @@ All staging models deduplicate using `qualify row_number() over (partition by <d
 - **Sales/Finance:** Deferred. Requires vendor number from App Store Connect > Agreements, Tax, and Banking.
 - **JWT auto-refresh:** `client.py` caches the token and refreshes 60 seconds before the 20-minute expiry. No manual intervention needed.
 - **TSV column names with dashes:** Apple TSV headers like `Pre-Order` contain dashes. `endpoints.py _snake()` converts these to underscores (`pre_order`). Raw BQ data ingested before 2026-06-28 has the old column name `pre-order`; `stg_appstore_app_downloads` uses `coalesce(pre_order, \`pre-order\`)` to handle both.
-- **New columns from Apple are automatically dropped at ingest:** `bq_loader.py` fetches the existing BQ table schema before loading and filters out any columns not already in the table. Pipeline won't fail when Apple adds new TSV fields — they're silently ignored with a warning log. To capture a new column, update BQ schema + staging model + rebuild dbt. See runbook.md §11.
+- **New columns from Apple are automatically dropped at ingest:** `bq_loader.py` fetches the existing BQ table schema before loading and filters out any columns not already in the table. Pipeline won't fail when Apple adds new TSV fields - they're silently ignored with a warning log. To capture a new column, update BQ schema + staging model + rebuild dbt. See runbook.md §11.
 
 ---
 

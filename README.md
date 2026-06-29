@@ -43,10 +43,7 @@ tring-data-pipeline/
   docs/           Setup, handover, runbook, data catalogs
 ```
 
-> **Dockerfiles live per service** - `ingestion/Dockerfile` and
-> `transform/Dockerfile`, not at the repo root. Each service has its own build
-> context and `.dockerignore`, so the two images build independently. Cloud
-> Build (`cloudbuild/build-push.yaml`) builds both. No local Docker needed.
+> **Single image** - one root `Dockerfile` packages both ingestion (Python) and dbt into a single `pipeline` image. The image has no ENTRYPOINT; each Cloud Run Job sets `--command` and `--args` for its workload. Cloud Build (`cloudbuild/build-push.yaml`) builds it. No local Docker needed.
 
 ## Prerequisites
 

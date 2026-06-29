@@ -8,7 +8,7 @@
 
 > **Workflow behavior:** Workflow triggers extract-appsflyer, extract-moengage, and extract-play-console **in parallel**, polls each every 15s until SUCCEEDED (all three must succeed), then triggers dbt-transform, polls until SUCCEEDED, then returns. Total duration ~6-7 minutes for appsflyer+moengage (play-console adds time on first load; subsequent runs ~2-3 min). If any extract fails, Workflow fails immediately  -  dbt does NOT run.
 
-**Run pipeline (T-3 auto-computed — default window is T-4 to T-3):**
+**Run pipeline (T-3 auto-computed - default window is T-4 to T-3):**
 ```bash
 gcloud workflows run pipeline \
   --location=asia-southeast2 \
@@ -396,7 +396,7 @@ It means `startTime` and `endTime` sent to the API are equal -- this should not 
 
 **New columns added by the API provider (Apple, AppsFlyer, MoEngage, Google):**
 
-The ingestion layer (`bq_loader.py`) automatically filters out any columns from the API response that are not in the existing BQ table schema. New fields are silently dropped at ingest time — **no pipeline failure, no manual schema update needed just to keep the pipeline running**.
+The ingestion layer (`bq_loader.py`) automatically filters out any columns from the API response that are not in the existing BQ table schema. New fields are silently dropped at ingest time - **no pipeline failure, no manual schema update needed just to keep the pipeline running**.
 
 A warning is logged: `dropping unknown columns not in BQ schema: {'new_col'}`. Check Cloud Logging periodically to know what Apple/Google added:
 
@@ -520,7 +520,7 @@ General steps for any new source:
 2. Add `--source <source_name>` handler to `cli.py`
 3. Add config env vars to `common/config.py`
 4. Create the Secret Manager secret, SA, IAM, and BQ datasets (see `docs/gcp-setup.md` section on adding sources)
-5. Create new Cloud Run Job pointing to the ingestion image with `--source <source_name>`
+5. Create new Cloud Run Job using the `pipeline` image with `--command=python --args=-m,tring_ingest,--source,<source_name>`
 6. Add the new extract job to `pipeline.yaml` as a parallel branch (min 2 branches required for parallel mode)
 7. Add dbt models under `transform/models/staging/<source>/` and `transform/models/marts/<source>/`
 
@@ -554,10 +554,10 @@ bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_raw
 bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_staging
 bq --project_id=$PROJECT mk --location=asia-southeast2 moengage_mart
 
-# Cloud Run Job (same ingestion image, different --source)
+# Cloud Run Job (uses pipeline image, different --source arg)
 REGISTRY=asia-southeast2-docker.pkg.dev
 gcloud run jobs create extract-moengage \
-  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
   --region=asia-southeast2 \
   --service-account=sa-extract-moengage@${PROJECT}.iam.gserviceaccount.com \
   --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET_RAW_MOENGAGE=moengage_raw,REGION=asia-southeast2" \
@@ -573,39 +573,46 @@ gcloud run jobs create extract-moengage \
 
 ## 14. Deploying a change
 
-> **Important:** All code (ingestion Python and dbt SQL models) is baked into Docker images at build time. Running `gcloud run jobs execute` without rebuilding the image will use stale code from the previous build. Always rebuild first when code changes.
+> **Important:** All code (ingestion Python and dbt SQL models) is baked into the single `pipeline` Docker image at build time. Running `gcloud run jobs execute` without rebuilding the image will use stale code from the previous build. Always rebuild first when code changes.
 >
-> - Changed `transform/` SQL? Rebuild both images (build-push.yaml builds ingestion + dbt together), update `dbt-transform`, then execute.
-> - Changed `ingestion/` Python? Rebuild, update all `extract-*` jobs, then execute.
-> - Changed both? Rebuild once, update all 5 jobs.
+> - Changed `transform/` SQL or `ingestion/` Python? Rebuild the image, update all 5 jobs, then execute.
+> - Changed both? Same: rebuild once, update all 5 jobs.
 
 ```bash
+REGISTRY=asia-southeast2-docker.pkg.dev
+
 # Build + push new image
 gcloud builds submit . \
   --config=cloudbuild/build-push.yaml \
   --substitutions="_PROJECT=$PROJECT" \
   --project=$PROJECT
 
-# Update Cloud Run Jobs to new image
+# Update all Cloud Run Jobs to new image (--command/--args must be repeated on update)
 gcloud run jobs update extract-appsflyer \
-  --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/ingestion:latest \
-  --region=asia-southeast2 \
-  --project=$PROJECT
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
+  --command=python --args="-m,tring_ingest,--source,appsflyer" \
+  --region=asia-southeast2 --project=$PROJECT
 
 gcloud run jobs update extract-moengage \
-  --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/ingestion:latest \
-  --region=asia-southeast2 \
-  --project=$PROJECT
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
+  --command=python --args="-m,tring_ingest,--source,moengage" \
+  --region=asia-southeast2 --project=$PROJECT
 
 gcloud run jobs update extract-play-console \
-  --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/ingestion:latest \
-  --region=asia-southeast2 \
-  --project=$PROJECT
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
+  --command=python --args="-m,tring_ingest,--source,play_console" \
+  --region=asia-southeast2 --project=$PROJECT
+
+gcloud run jobs update extract-app-store \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
+  --command=python --args="-m,tring_ingest,--source,app_store" \
+  --region=asia-southeast2 --project=$PROJECT
 
 gcloud run jobs update dbt-transform \
-  --image=asia-southeast2-docker.pkg.dev/$PROJECT/tring-service/dbt:latest \
-  --region=asia-southeast2 \
-  --project=$PROJECT
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
+  --command=dbt --args="build,--project-dir,/app/transform,--target,prod,--target-path,/tmp/dbt-target" \
+  --update-env-vars=DBT_PROFILES_DIR=/app/transform \
+  --region=asia-southeast2 --project=$PROJECT
 ```
 
 ---

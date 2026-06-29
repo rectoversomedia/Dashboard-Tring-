@@ -253,7 +253,7 @@ bq --project_id=$PROJECT mk --location=asia-southeast2 play_mart
 # Cloud Run Job
 REGISTRY=asia-southeast2-docker.pkg.dev
 gcloud run jobs create extract-play-console \
-  --image=${REGISTRY}/${PROJECT}/tring-service/ingestion:latest \
+  --image=${REGISTRY}/${PROJECT}/tring-service/pipeline:latest \
   --region=asia-southeast2 \
   --service-account=sa-extract-play-console@${PROJECT}.iam.gserviceaccount.com \
   --set-env-vars="GCP_PROJECT=${PROJECT},BQ_DATASET_RAW_PLAY_CONSOLE=play_raw,REGION=asia-southeast2" \
@@ -304,7 +304,7 @@ Tables. Full refresh each run. Partitioned + clustered for query efficiency.
 
 ## Known Behaviors and Limitations
 
-- **Metric set data lag:** Play Developer Reporting API data lags by exactly **2 days** (confirmed 2026-06-28 via live API testing). `date_to=T-1` returns HTTP 400 `end_date exceeds freshness boundary`; `date_to=T-2` returns 200. The pipeline default window (T-3 to T-2) is set to accommodate this — this window applies to all 4 sources (AppsFlyer, MoEngage, App Store, Play Console) since all share the same `DATE_FROM`/`DATE_TO` env vars injected by Cloud Workflows. The other 3 sources have no data lag; the 1-day conservatism is a deliberate trade-off to keep pipeline.yaml simple (one shared window).
+- **Metric set data lag:** Play Developer Reporting API data lags by exactly **2 days** (confirmed 2026-06-28 via live API testing). `date_to=T-1` returns HTTP 400 `end_date exceeds freshness boundary`; `date_to=T-2` returns 200. The pipeline default window (T-3 to T-2) is set to accommodate this - this window applies to all 4 sources (AppsFlyer, MoEngage, App Store, Play Console) since all share the same `DATE_FROM`/`DATE_TO` env vars injected by Cloud Workflows. The other 3 sources have no data lag; the 1-day conservatism is a deliberate trade-off to keep pipeline.yaml simple (one shared window).
 - **Reviews not date-scoped:** The reviews endpoint returns all reviews regardless of date range. Re-running produces duplicates in raw; staging deduplicates by `review_id` and `last_modified_seconds`.
 - **errorCountMetricSet requires reportType dimension:** Omitting `reportType` returns HTTP 400. This is an API constraint, not optional.
 - **errorCountMetricSet does not support countryCode:** Adding `countryCode` to this metric set returns HTTP 400 (verified live 2026-06-28). The other 5 metric sets all support `countryCode`. This is an API constraint specific to `errorCountMetricSet`.
