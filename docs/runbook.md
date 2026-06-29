@@ -8,14 +8,14 @@
 
 > **Workflow behavior:** Workflow triggers extract-appsflyer, extract-moengage, and extract-play-console **in parallel**, polls each every 15s until SUCCEEDED (all three must succeed), then triggers dbt-transform, polls until SUCCEEDED, then returns. Total duration ~6-7 minutes for appsflyer+moengage (play-console adds time on first load; subsequent runs ~2-3 min). If any extract fails, Workflow fails immediately  -  dbt does NOT run.
 
-**Run pipeline (T-2 auto-computed — default window is T-3 to T-2):**
+**Run pipeline (T-3 auto-computed — default window is T-4 to T-3):**
 ```bash
 gcloud workflows run pipeline \
   --location=asia-southeast2 \
   --project=$PROJECT
 ```
 
-> **Why T-2 not T-1?** Play Console vitals API has a 2-day data lag. Requesting T-1 returns HTTP 400 `end_date exceeds freshness boundary`. T-2 is the most recent date always available. The pipeline fetches one day of data per run (T-3 as date_from, T-2 as date_to).
+> **Why T-4/T-3?** Play Console vitals API (crashRate, ANR, wakelock, wakeup, slowStart) has a 3-day data lag. Requesting T-3 or newer returns HTTP 400. Confirmed via testing 2026-06-29: T-4 (date_from=T-4, date_to=T-4) = 200 OK all metric sets; T-3 = 400. The pipeline fetches one day of data per run (T-4 as date_from, T-3 as date_to). All 4 sources share the same window -- AppsFlyer/MoEngage/App Store have no issue with T-4.
 
 **Run for specific date range (backfill):**
 ```bash

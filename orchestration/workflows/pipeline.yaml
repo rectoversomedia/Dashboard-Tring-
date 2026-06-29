@@ -19,10 +19,10 @@ main:
             steps:
               - compute_yesterday:
                   assign:
-                    - two_days_ago_unix: ${sys.now() - 172800}
                     - three_days_ago_unix: ${sys.now() - 259200}
-                    - date_from: ${text.substring(time.format(three_days_ago_unix), 0, 10)}
-                    - date_to: ${text.substring(time.format(two_days_ago_unix), 0, 10)}
+                    - four_days_ago_unix: ${sys.now() - 345600}
+                    - date_from: ${text.substring(time.format(four_days_ago_unix), 0, 10)}
+                    - date_to: ${text.substring(time.format(three_days_ago_unix), 0, 10)}
 
     - build_extract_body:
         assign:

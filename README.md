@@ -71,7 +71,7 @@ WIB - a default assumption from the TSD, client has not confirmed). No manual
 action needed.
 
 ```bash
-# manual run (yesterday)
+# manual run (default window: T-4 to T-3)
 gcloud workflows run pipeline --location=asia-southeast2 --project=YOUR_PROJECT
 
 # backfill a date range
@@ -80,8 +80,7 @@ gcloud workflows run pipeline \
   --location=asia-southeast2 --project=YOUR_PROJECT
 ```
 
-The workflow auto-computes yesterday when no dates are passed. See
-`docs/runbook.md` for backfill, log reading, token rotation, and schedule changes.
+The workflow auto-computes **T-4 to T-3** (3 days back) when no dates are passed. Play Console vitals API has a 3-day data lag -- requesting T-3 or newer returns HTTP 400. See `docs/runbook.md` for backfill, log reading, token rotation, and schedule changes.
 
 ## Branch Strategy
 
