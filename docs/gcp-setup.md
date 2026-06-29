@@ -547,25 +547,17 @@ gcloud workflows describe pipeline \
 
 ## 10. Create Cloud Scheduler Jobs
 
-```bash
-# 08:00 WIB (01:00 UTC)
-gcloud scheduler jobs create http pipeline-trigger-morning \
-  --location=asia-southeast2 \
-  --schedule="0 1 * * *" \
-  --time-zone="Asia/Jakarta" \
-  --uri="https://workflowexecutions.googleapis.com/v1/projects/${PROJECT}/locations/asia-southeast2/workflows/pipeline/executions" \
-  --message-body="{}" \
-  --oauth-service-account-email=sa-scheduler@${PROJECT}.iam.gserviceaccount.com \
-  --project=$PROJECT
+Run once daily at 09:00 WIB (02:00 UTC). This timing ensures Play Console vitals data (3-day lag) is settled and AppsFlyer rate limit has reset (resets 00:00 UTC = 07:00 WIB).
 
-# 20:00 WIB (13:00 UTC)
-gcloud scheduler jobs create http pipeline-trigger-afternoon \
+```bash
+gcloud scheduler jobs create http pipeline-trigger-daily \
   --location=asia-southeast2 \
-  --schedule="0 13 * * *" \
-  --time-zone="Asia/Jakarta" \
+  --schedule="0 2 * * *" \
+  --time-zone="UTC" \
   --uri="https://workflowexecutions.googleapis.com/v1/projects/${PROJECT}/locations/asia-southeast2/workflows/pipeline/executions" \
   --message-body="{}" \
   --oauth-service-account-email=sa-scheduler@${PROJECT}.iam.gserviceaccount.com \
+  --headers="Content-Type=application/json" \
   --project=$PROJECT
 ```
 

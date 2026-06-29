@@ -2,7 +2,7 @@
 
 > **Before you run any command here:** set your project once in the terminal: `export PROJECT=your-gcp-project-id`. Every command below uses `$PROJECT`. New to the terms used here (Workflow, Cloud Run Job, backfill, T-1)? See [index.md](index.md) for a glossary.
 
-> **Schedule note:** Pipeline runs automatically twice daily via Cloud Scheduler (08:00 and 20:00 WIB). This schedule is a default assumption from the TSD - the client has not confirmed a final schedule. To update: `gcloud scheduler jobs update http pipeline-trigger-morning --schedule="0 H * * *" --location=asia-southeast2 --project=$PROJECT` (and same for `pipeline-trigger-afternoon`).
+> **Schedule note:** Pipeline runs once daily at 09:00 WIB (02:00 UTC) via Cloud Scheduler job `pipeline-trigger-daily`. To update the schedule: `gcloud scheduler jobs update http pipeline-trigger-daily --schedule="0 H * * *" --location=asia-southeast2 --project=$PROJECT`.
 
 ## 1. Triggering a manual pipeline run
 
@@ -337,25 +337,17 @@ gcloud secrets versions disable OLD_VERSION_NUMBER --secret=play-console-sa-key 
 
 ## 8. Updating the pipeline schedule
 
-The default schedule is 08:00 and 20:00 WIB (01:00 and 13:00 UTC). To change:
+Pipeline runs once daily at 09:00 WIB (02:00 UTC) via `pipeline-trigger-daily`. To change the schedule:
 
 ```bash
-# Morning trigger (change cron as needed)
-gcloud scheduler jobs update http pipeline-trigger-morning \
-  --schedule="0 1 * * *" \
-  --time-zone="Asia/Jakarta" \
-  --location=asia-southeast2 \
-  --project=$PROJECT
-
-# Afternoon trigger
-gcloud scheduler jobs update http pipeline-trigger-afternoon \
-  --schedule="0 13 * * *" \
-  --time-zone="Asia/Jakarta" \
+gcloud scheduler jobs update http pipeline-trigger-daily \
+  --schedule="0 2 * * *" \
+  --time-zone="UTC" \
   --location=asia-southeast2 \
   --project=$PROJECT
 ```
 
-Cron format: `minute hour day month weekday`. `0 1 * * *` = every day at 01:00 UTC = 08:00 WIB. Use [crontab.guru](https://crontab.guru) to verify your cron expression before applying.
+Cron format: `minute hour day month weekday`. `0 2 * * *` = every day at 02:00 UTC = 09:00 WIB. Use [crontab.guru](https://crontab.guru) to verify your cron expression before applying.
 
 To verify current schedule:
 ```bash
@@ -433,12 +425,11 @@ Apple TSV headers are normalized via `_snake()` in `endpoints.py`: spaces → `_
 
 ---
 
-## 12. Checking for failures and adding alerting
+## 12. Checking for failures and alerting
 
-By default there is no automated alert (not provisioned in the initial
-handover). Failures surface as a `FAILED` Workflow execution. Check manually as
-below, or set up email alerting (next sub-section) so failures notify you
-automatically.
+Email alerting is active in `dashboard-tring`. Alert policy `Pipeline Workflow Failed` (ID `11421538021909760378`) fires when the pipeline Workflow finishes with `FAILED` status - email goes to `tribayu.vendor.digital@pegadaian.co.id` (channel ID `4738335329203254077`). **Tri Bayu must verify the email channel** by clicking the verification link Google sent to that inbox, otherwise alerts will not be delivered.
+
+For a new GCP project (e.g. client prod), repeat the setup below.
 
 Check periodically, or after a scheduled run:
 
