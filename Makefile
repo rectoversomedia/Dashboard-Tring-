@@ -67,7 +67,7 @@ tf-apply:
 
 # -- Cloud Run Job deploy (create-* = first-time, deploy-* = update existing job) --
 
-# All jobs use IMAGE_PIPELINE. Each must set --command/--args (image has no ENTRYPOINT).
+# All jobs use IMAGE_PIPELINE. Each sets --command/--args to override the default CMD (HTTP health check server).
 # Dates (DATE_FROM/DATE_TO) are injected at runtime by Cloud Workflows.
 
 create-appsflyer: require-project

@@ -21,7 +21,7 @@ steps:
     waitFor: ["build-pipeline"]
 
   # Jobs provisioned once via gcloud (docs/gcp-setup.md steps 8-10). Build only rolls new image onto existing jobs.
-  # All 5 jobs use the same image; each must set --command/--args (no ENTRYPOINT in image).
+  # All 5 jobs use the same image. Each sets --command/--args to override the default CMD (HTTP health check server).
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-appsflyer-job
     entrypoint: gcloud

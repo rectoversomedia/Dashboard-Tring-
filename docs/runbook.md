@@ -268,14 +268,22 @@ gcloud run jobs execute dbt-transform \
 
 > **Why needed:** MoEngage campaign-stats API returns aggregate totals for the entire window, not per-day rows. To get daily trend data in the dashboard, each day must be ingested as a separate 1-day window. Option A and B send one window per run -- correct for all sources except MoEngage trend use cases.
 
-> **Status: NOT YET IMPLEMENTED.** Planned as Cloud Workflow `moengage-backfill` at `orchestration/workflows/moengage_backfill.yaml`. When built, run via:
-> ```bash
-> gcloud workflows run moengage-backfill \
->   --data='{"date_from":"2026-01-01","date_to":"2026-01-31"}' \
->   --location=asia-southeast2 \
->   --project=$PROJECT
-> ```
-> The workflow loops day by day, triggers `extract-moengage` per date, waits for each to finish. Laptop can be closed. Use local script `tring-repo/test-moengage/backfill_daily.py` in the meantime.
+```bash
+gcloud workflows run moengage-backfill \
+  --data='{"date_from":"2026-05-01","date_to":"2026-05-31"}' \
+  --location=asia-southeast2 \
+  --project=$PROJECT
+```
+
+The workflow (`orchestration/workflows/moengage_backfill.yaml`) loops day by day: triggers `extract-moengage` with a 1-day window per date, waits for SUCCEEDED, then moves to the next day. Laptop can be closed. Each day takes about 5 minutes -- 30 days = roughly 2.5 hours.
+
+Check progress:
+```bash
+gcloud workflows executions list moengage-backfill \
+  --location=asia-southeast2 \
+  --project=$PROJECT \
+  --limit=3
+```
 
 ---
 

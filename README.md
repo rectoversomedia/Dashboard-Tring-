@@ -43,7 +43,7 @@ tring-data-pipeline/
   docs/           Setup, handover, runbook, data catalogs
 ```
 
-> **Single image** - one root `Dockerfile` packages both ingestion (Python) and dbt into a single `pipeline` image. The image has no ENTRYPOINT; each Cloud Run Job sets `--command` and `--args` for its workload. Cloud Build (`cloudbuild/build-push.yaml`) builds it. No local Docker needed.
+> **Single image** - one root `Dockerfile` packages both ingestion (Python) and dbt into a single `pipeline` image. One root `Dockerfile` packages both ingestion and dbt. Default `CMD` runs a minimal HTTP server so Cloud Run Service health checks pass (Jenkins CI/CD uses `gcloud run deploy`). Cloud Run Jobs override this with `--command`/`--args` for their actual workload. Cloud Build (`cloudbuild/build-push.yaml`) builds it. No local Docker needed.
 
 ## Prerequisites
 

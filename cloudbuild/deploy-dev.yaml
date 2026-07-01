@@ -20,8 +20,8 @@ steps:
     args: ["push", "--all-tags", "${_REGISTRY}/${_PROJECT}/${_REPO}/pipeline"]
     waitFor: ["build-pipeline"]
 
-  # All 5 jobs use the same single image. Each job must set --command and --args
-  # because the image has no ENTRYPOINT.
+  # All 5 jobs use the same single image. Each job sets --command and --args
+  # to override the default CMD (HTTP health check server for Cloud Run Service).
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-appsflyer-job
     entrypoint: gcloud

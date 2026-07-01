@@ -343,7 +343,7 @@ This builds the root `Dockerfile` (contains both ingestion Python package and db
 asia-southeast2-docker.pkg.dev/${PROJECT}/tring-service/pipeline:latest
 ```
 
-The image has no ENTRYPOINT. Each Cloud Run Job must set `--command` and `--args` explicitly (done in Section 8).
+The image has a default `CMD` that runs a minimal HTTP server (for Cloud Run Service health checks via Jenkins CI/CD). Each Cloud Run Job overrides this with `--command` and `--args` explicitly (done in Section 8).
 
 The command uploads your local code to Cloud Build and streams build logs. It takes 5-8 minutes. A `SUCCESS` at the end means the image is ready in Artifact Registry.
 
@@ -360,7 +360,7 @@ You should see one image path: `pipeline`.
 
 > **Note on date args:** dates are not set at job creation. Cloud Workflows injects them at runtime via `containerOverrides.env` (`DATE_FROM`/`DATE_TO`). For manual backfill, use `gcloud run jobs execute` with `--update-env-vars="DATE_FROM=...,DATE_TO=..."` (see runbook section 3).
 
-> **IMPORTANT - no ENTRYPOINT in image:** The `pipeline` image has no ENTRYPOINT. Every job MUST set `--command` and `--args`. A job created without them will not know what to run and will fail at runtime, not at deploy time.
+> **IMPORTANT - always set --command and --args:** The `pipeline` image default CMD is an HTTP health check server (for Jenkins CI/CD). Every Cloud Run Job MUST set `--command` and `--args` to run the actual workload. A job created without them will start the HTTP server instead of the pipeline, silently doing nothing.
 
 > **dbt profiles dir:** The `dbt-transform` job uses `DBT_PROFILES_DIR=/app/transform` env var instead of passing `--profiles-dir` in args. This is required because gcloud parses multiple `--*dir` flags inside `--args` incorrectly. Do not change this.
 
