@@ -15,7 +15,7 @@ typed as (
         platform_version,
         source_type,
         page_type,
-        coalesce(pre_order, `pre-order`)                        as pre_order,
+        pre_order,
         territory,
         safe_cast(counts as int64)                              as counts,
 
