@@ -1,3 +1,10 @@
+{{
+    config(
+        materialized='table',
+        partition_by={'field': 'date', 'data_type': 'date'},
+        cluster_by=['device', 'territory']
+    )
+}}
 -- Staging: app sessions. Cast types, dedup per natural key (latest ingest).
 
 with source as (
