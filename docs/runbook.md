@@ -748,16 +748,34 @@ gcloud run jobs execute extract-app-store \
   --wait
 ```
 
-**Analytics historical backfill (ONE_TIME_SNAPSHOT - deferred until July 2026):**
-- Quota: 1 snapshot per month per app. June 2026 quota already used.
-- Run in July 2026:
+**Analytics historical backfill (ONE_TIME_SNAPSHOT - COMPLETE for `dashboard-tring`):**
+- Snapshot request ID: `f8470156-c123-49cf-860d-bed40475e688` (retrievable via `GET /v1/apps/1350501409/analyticsReportRequests` — no need to ask client)
+- Quota: 1 snapshot ACTIVE per app at a time (not per-month reset — HTTP 409 while old snapshot still active)
+- `dashboard-tring` DONE (2026-07-20): 6,188,432 rows, Nov 2024 - Jun 2026
+- To run for another GCP project (e.g. client prod):
+
 ```bash
-cd tring-data-pipeline
-uv run --with PyJWT --with cryptography --with requests python3 ../test-appstore/test_appstore_endpoints.py --snapshot
+# 1. Update job to snapshot mode + 8Gi memory
+gcloud run jobs update extract-app-store \
+  --command=python --args="-m,tring_ingest,--source,app_store,--snapshot" \
+  --memory=8Gi --max-retries=0 --task-timeout=7200 \
+  --project=$PROJECT --region=asia-southeast2
+
+# 2. Run
+gcloud run jobs execute extract-app-store \
+  --project=$PROJECT --region=asia-southeast2 --async
+
+# 3. After success: revert to normal
+gcloud run jobs update extract-app-store \
+  --command=python --args="-m,tring_ingest,--source,app_store" \
+  --memory=4Gi --project=$PROJECT --region=asia-southeast2
+
+# 4. Run dbt
+gcloud run jobs execute dbt-transform --project=$PROJECT --region=asia-southeast2
 ```
-Then wait 24-48h for Apple to generate instances, then run extract-app-store normally.
 
 **App Store API details (do NOT hardcode in code):**
 - Key ID and Issuer ID in `.env` (gitignored, loaded from Secret Manager in production)
 - .p8 file at repo root (gitignored, loaded from Secret Manager in production)
 - Analytics ONGOING request ID: `77203237-b1c3-40ed-bccf-ce4345c7d5ab` (override via `APPSTORE_ANALYTICS_REQUEST_ID` env var if request is recreated)
+- Analytics SNAPSHOT request ID: `f8470156-c123-49cf-860d-bed40475e688` (override via `APPSTORE_SNAPSHOT_REQUEST_ID` env var)
