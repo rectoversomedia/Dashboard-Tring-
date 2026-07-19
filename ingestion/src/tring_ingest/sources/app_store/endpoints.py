@@ -4,8 +4,15 @@ APP_ID = os.environ.get("APPSTORE_APP_ID", "1350501409")
 BASE = "https://api.appstoreconnect.apple.com"
 
 # ongoing request created 2026-06-26; override via env if recreated
+# this is a report request UUID, not a creds; useless without JWT auth
 ONGOING_REQUEST_ID = os.environ.get(
     "APPSTORE_ANALYTICS_REQUEST_ID", "77203237-b1c3-40ed-bccf-ce4345c7d5ab"
+)
+
+# one-time snapshot request created 2026-06-26; covers Nov 2024 - Jun 2026 historical data
+# report request UUID only, not a creds
+SNAPSHOT_REQUEST_ID = os.environ.get(
+    "APPSTORE_SNAPSHOT_REQUEST_ID", "f8470156-c123-49cf-860d-bed40475e688"
 )
 
 REVIEWS_PAGE_SIZE = 200

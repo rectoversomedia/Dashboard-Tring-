@@ -154,3 +154,7 @@ models:
         description: "Average star rating"
       - name: negative_reviews
         description: "Count of reviews with rating <= 2"
+      - name: crash_rate
+        description: "iOS install failure rate: Failure / (Success + Failure). Null if no install performance data for that day."
+      - name: total_install_attempts
+        description: "Total install attempts (Success + Failure) on this date"

@@ -1,7 +1,7 @@
 import gzip
 import io
 
-from tring_ingest.common.bq_loader import load_json_rows_to_raw
+from tring_ingest.common.bq_loader import load_json_rows_to_raw, load_tsv_stream_to_raw
 from tring_ingest.common.config import APPSTORE_APP_ID, BQ_DATASET_RAW_APPSTORE, GCP_PROJECT
 from tring_ingest.common.logging import get_logger
 from tring_ingest.sources.app_store import endpoints as ep
@@ -43,8 +43,51 @@ def _resolve_report_ids(client: AppStoreClient, request_id: str) -> dict:
     return found  # {name: (report_id, table)}
 
 
+def _stream_analytics_report(
+    client: AppStoreClient,
+    report_id: str,
+    table: str,
+    source: str,
+    date_from: str,
+    date_to: str,
+) -> int:
+    # stream per-segment directly to BQ -- re-fetch segment URL just before download
+    # (signed S3 URLs expire in 5 min; re-fetching gives a fresh URL each time)
+    total = 0
+    url = f"{ep.BASE}/v1/analyticsReports/{report_id}/instances?limit=200"
+    while url:
+        data = client.get(url).json()
+        for inst in data.get("data", []):
+            seg_list_url = f"{ep.BASE}/v1/analyticsReportInstances/{inst['id']}/segments"
+            seg_ids = [s["id"] for s in client.get(seg_list_url).json().get("data", [])]
+            for seg_id in seg_ids:
+                # re-fetch this single segment to get a fresh signed URL
+                fresh = client.get(f"{ep.BASE}/v1/analyticsReportSegments/{seg_id}").json()
+                dl_url = fresh.get("data", {}).get("attributes", {}).get("url")
+                if not dl_url:
+                    continue
+                raw = client.get_unsigned(dl_url).content
+                with gzip.open(io.BytesIO(raw)) as f:
+                    text = f.read().decode("utf-8")
+                n = load_tsv_stream_to_raw(
+                    tsv_text=text,
+                    dataset_id=BQ_DATASET_RAW_APPSTORE,
+                    table_id=table,
+                    source=source,
+                    date_from=date_from,
+                    date_to=date_to,
+                    project_id=GCP_PROJECT,
+                )
+                del text
+                if n:
+                    total += n
+                    logger.info(f"loaded {n} rows to {table} (seg {seg_id[:8]})")
+        url = data.get("links", {}).get("next")
+    return total
+
+
 def _pull_analytics_report(client: AppStoreClient, report_id: str) -> list[dict]:
-    # all instances -> all segments -> download gzip tsv -> flattened rows
+    # kept for normal run() which still collects all rows (daily window is small)
     rows: list[dict] = []
     url = f"{ep.BASE}/v1/analyticsReports/{report_id}/instances?limit=200"
     while url:
@@ -56,13 +99,45 @@ def _pull_analytics_report(client: AppStoreClient, report_id: str) -> list[dict]
                 dl_url = seg["attributes"].get("url")
                 if not dl_url:
                     continue
-                # fetch and decompress immediately -- s3 signed url expires ~5 min after fetch
                 raw = client.get_unsigned(dl_url).content
                 with gzip.open(io.BytesIO(raw)) as f:
                     text = f.read().decode("utf-8")
                 rows.extend(ep.flatten_tsv(text))
         url = data.get("links", {}).get("next")
     return rows
+
+
+def run_snapshot(creds: str | None = None) -> None:
+    """Backfill from ONE_TIME_SNAPSHOT request (Nov 2024 - Jun 2026 historical data). Run once."""
+    client = AppStoreClient(creds=creds)
+    errors: list[str] = []
+    total = 0
+
+    try:
+        report_map = _resolve_report_ids(client, ep.SNAPSHOT_REQUEST_ID)
+    except Exception as exc:
+        logger.error(f"snapshot resolve report ids failed: {exc}")
+        raise
+
+    for name, (report_id, table) in report_map.items():
+        try:
+            n = _stream_analytics_report(
+                client=client,
+                report_id=report_id,
+                table=table,
+                source="app_store_snapshot",
+                date_from="2024-11-01",
+                date_to="2026-06-26",
+            )
+            total += n
+            logger.info(f"snapshot {name}: {n} rows -> {table}")
+        except Exception as exc:
+            logger.error(f"snapshot {name} failed: {exc}")
+            errors.append(table)
+
+    if errors:
+        raise RuntimeError(f"Snapshot extract failed for: {errors}")
+    logger.info(f"Snapshot extract complete: {total} total rows")
 
 
 def run(date_from: str, date_to: str, creds: str | None = None) -> None:
