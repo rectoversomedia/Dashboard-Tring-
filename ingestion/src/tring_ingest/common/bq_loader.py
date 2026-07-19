@@ -136,6 +136,82 @@ def load_csv_to_raw(
     return len(rows)
 
 
+def load_tsv_stream_to_raw(
+    tsv_text: str,
+    dataset_id: str,
+    table_id: str,
+    source: str,
+    date_from: str,
+    date_to: str,
+    project_id: str = GCP_PROJECT,
+    batch_size: int = 10_000,
+) -> int:
+    # stream TSV text in batches to avoid holding full segment in RAM.
+    # schema is inferred from header; subsequent batches reuse same schema + job_config.
+    lines = tsv_text.splitlines()
+    if len(lines) < 2:
+        return 0
+
+    header = [
+        col.strip().lower().replace(" ", "_").replace("-", "_") for col in lines[0].split("\t")
+    ]
+    client = bigquery.Client(project=project_id)
+    run_id = str(uuid.uuid4())
+    ingested_at = datetime.now(UTC).isoformat()
+
+    dataset_ref = bigquery.Dataset(f"{project_id}.{dataset_id}")
+    dataset_ref.location = REGION
+    with contextlib.suppress(Conflict):
+        client.create_dataset(dataset_ref, exists_ok=True)
+
+    table_ref = f"{project_id}.{dataset_id}.{table_id}"
+    existing = _get_existing_columns(client, table_ref)
+    source_columns = [c for c in header if c in existing] if existing is not None else header
+
+    schema = _build_schema(source_columns)
+    job_config = bigquery.LoadJobConfig(
+        schema=schema,
+        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+        time_partitioning=bigquery.TimePartitioning(
+            type_=bigquery.TimePartitioningType.DAY,
+            field="_ingested_at",
+        ),
+    )
+
+    total = 0
+    batch: list[dict] = []
+
+    def _flush(b: list[dict]) -> None:
+        client.load_table_from_json(b, table_ref, job_config=job_config).result()
+
+    for line in lines[1:]:
+        vals = line.split("\t")
+        row = {
+            col: (vals[i] if i < len(vals) else "")
+            for i, col in enumerate(header)
+            if col in source_columns
+        }
+        row["_ingested_at"] = ingested_at
+        row["_source"] = source
+        row["_app_id"] = ""
+        row["_platform"] = ""
+        row["_run_id"] = run_id
+        row["_extract_from"] = date_from
+        row["_extract_to"] = date_to
+        batch.append(row)
+        if len(batch) >= batch_size:
+            _flush(batch)
+            total += len(batch)
+            batch = []
+
+    if batch:
+        _flush(batch)
+        total += len(batch)
+
+    return total
+
+
 def load_json_rows_to_raw(
     rows: list[dict],
     dataset_id: str,
