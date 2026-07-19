@@ -1,3 +1,10 @@
+{{
+    config(
+        materialized='table',
+        partition_by={'field': 'date', 'data_type': 'date'},
+        cluster_by=['download_type', 'territory']
+    )
+}}
 -- Staging: app downloads. Cast types, dedup per natural key (latest ingest).
 
 with source as (
@@ -15,7 +22,7 @@ typed as (
         platform_version,
         source_type,
         page_type,
-        pre_order,
+        coalesce(pre_order, `pre-order`)                        as pre_order,
         territory,
         safe_cast(counts as int64)                              as counts,
 
