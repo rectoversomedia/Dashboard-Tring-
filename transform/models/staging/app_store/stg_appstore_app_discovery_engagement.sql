@@ -1,3 +1,10 @@
+{{
+    config(
+        materialized='table',
+        partition_by={'field': 'date', 'data_type': 'date'},
+        cluster_by=['event', 'territory']
+    )
+}}
 -- Staging: app store discovery and engagement. Cast types, dedup per natural key (latest ingest).
 -- event values: 'Impression', 'Page view', 'Tap' (Apple API enum).
 
