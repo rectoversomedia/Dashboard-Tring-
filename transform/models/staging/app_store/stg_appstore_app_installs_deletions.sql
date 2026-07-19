@@ -1,3 +1,10 @@
+{{
+    config(
+        materialized='table',
+        partition_by={'field': 'date', 'data_type': 'date'},
+        cluster_by=['event', 'territory']
+    )
+}}
 -- Staging: app installs and deletions. Cast types, dedup per natural key (latest ingest).
 -- event values: 'Install' or 'Delete' (Apple API enum).
 
