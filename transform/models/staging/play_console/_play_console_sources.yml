@@ -53,3 +53,31 @@ sources:
           warn_after: {count: 73, period: hour}
           error_after: {count: 97, period: hour}
         loaded_at_field: _ingested_at
+
+      - name: raw_gcs_installs
+        description: "Verbatim install/uninstall rows from GCS stats/installs/*_overview.csv. All fields STRING."
+        freshness:
+          warn_after: {count: 193, period: hour}
+          error_after: {count: 217, period: hour}
+        loaded_at_field: _ingested_at
+
+      - name: raw_gcs_crashes
+        description: "Verbatim daily crash/ANR count rows from GCS stats/crashes/*_overview.csv. All fields STRING."
+        freshness:
+          warn_after: {count: 193, period: hour}
+          error_after: {count: 217, period: hour}
+        loaded_at_field: _ingested_at
+
+      - name: raw_gcs_store_performance_country
+        description: "Store listing performance by country from GCS stats/store_performance/*_country.csv. All fields STRING."
+        freshness:
+          warn_after: {count: 193, period: hour}
+          error_after: {count: 217, period: hour}
+        loaded_at_field: _ingested_at
+
+      - name: raw_gcs_store_performance_traffic
+        description: "Store listing performance by traffic source from GCS stats/store_performance/*_traffic_source.csv. All fields STRING."
+        freshness:
+          warn_after: {count: 193, period: hour}
+          error_after: {count: 217, period: hour}
+        loaded_at_field: _ingested_at
