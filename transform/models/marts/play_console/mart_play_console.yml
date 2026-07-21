@@ -46,3 +46,25 @@ models:
       - name: review_date
         data_tests:
           - not_null
+
+  - name: mart_play_console_gcs_stats
+    description: "Daily acquisition + crash counts from GCS. Joins installs, store performance, and crashes into one row per date."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+          - unique
+      - name: daily_device_installs
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: store_listing_impressions
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn

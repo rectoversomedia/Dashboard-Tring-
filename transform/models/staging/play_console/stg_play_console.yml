@@ -160,3 +160,69 @@ models:
       - name: last_modified_at
         data_tests:
           - not_null
+
+  - name: stg_play_console_gcs_installs
+    description: "Daily install/uninstall counts from GCS stats/installs/*_overview.csv. One row per date."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+          - unique
+      - name: daily_device_installs
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: daily_device_uninstalls
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+
+  - name: stg_play_console_gcs_crashes
+    description: "Daily absolute crash/ANR counts from GCS stats/crashes/*_overview.csv. One row per date."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+          - unique
+      - name: daily_crashes
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: daily_anrs
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+
+  - name: stg_play_console_gcs_store_performance
+    description: "Store listing performance by country from GCS. Grain: one row per date x country."
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+      - name: store_listing_visitors
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn
+      - name: store_listing_conversion_rate
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+              config:
+                severity: warn
