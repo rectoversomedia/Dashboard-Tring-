@@ -82,6 +82,11 @@ models:
             field: review_date
             data_type: date
           +cluster_by: ["star_rating"]
+        mart_play_console_gcs_stats:
+          +partition_by:
+            field: date
+            data_type: date
+          +cluster_by: ["platform"]
       app_store:
         +tags: ["app_store", "mart"]
         +schema: appstore_mart

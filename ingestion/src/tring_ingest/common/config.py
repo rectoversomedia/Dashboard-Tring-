@@ -43,6 +43,12 @@ BQ_DATASET_MART_PLAY_CONSOLE = "play_mart"
 # SA JSON stored in Secret Manager as a raw JSON string
 PLAY_CONSOLE_SECRET_NAME = os.environ.get("PLAY_CONSOLE_SECRET_NAME", "play-console-sa-key")
 
+# Play Console GCS stats (install/uninstall/store_performance/crashes)
+GCS_BUCKET_PLAY_CONSOLE = os.environ.get(
+    "GCS_BUCKET_PLAY_CONSOLE", "pubsite__rev_00060605014151750029"
+)
+PLAY_CONSOLE_PACKAGE_NAME = os.environ.get("PLAY_CONSOLE_PACKAGE_NAME", "co.id.pegadaian.aralia")
+
 # App Store Connect
 BQ_DATASET_RAW_APPSTORE = os.environ.get("BQ_DATASET_RAW_APPSTORE", "appstore_raw")
 BQ_DATASET_STAGING_APPSTORE = "appstore_staging"

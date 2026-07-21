@@ -19,6 +19,12 @@ def parse_args(argv=None):
     parser.add_argument(
         "--snapshot", action="store_true", help="run one-time snapshot backfill (app_store only)"
     )
+    parser.add_argument(
+        "--gcs-stats",
+        action="store_true",
+        dest="gcs_stats",
+        help="ingest Play Console GCS stats (installs/crashes/store_performance)",
+    )
     args = parser.parse_args(argv)
     if not args.snapshot and (not args.date_from or not args.date_to):
         parser.error("--from/--to required (or set DATE_FROM/DATE_TO env vars)")
@@ -51,9 +57,14 @@ def main(argv=None):
 
         run(date_from=args.date_from, date_to=args.date_to)
     elif args.source == "play_console":
-        from tring_ingest.sources.play_console.extract import run
+        if args.gcs_stats:
+            from tring_ingest.sources.play_console.gcs_stats import run_gcs_stats
 
-        run(date_from=args.date_from, date_to=args.date_to)
+            run_gcs_stats(date_from=args.date_from, date_to=args.date_to)
+        else:
+            from tring_ingest.sources.play_console.extract import run
+
+            run(date_from=args.date_from, date_to=args.date_to)
     elif args.source == "app_store":
         from tring_ingest.sources.app_store.extract import run
 
