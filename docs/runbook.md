@@ -108,7 +108,7 @@ gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name=
 ```
 
 Key lines to look for:
-- `Done. PASS=140 WARN=0 ERROR=0` → success (3 sources; PASS=N will increase once App Store source GCP is provisioned)
+- `Done. PASS=205 WARN=0 ERROR=0` → success (4 sources incl. GCS stats)
 - `Done. PASS=XX ERROR=N` → test failures, check which model
 
 **Step 4  -  Check execution list (optional):**
@@ -509,7 +509,7 @@ Common causes:
 
 **MoEngage** - fully implemented and E2E verified (2026-06-22: 599 campaigns, 4712 stats rows, exit(0), full pipeline SUCCEEDED). GCP infra provisioned (SA, secret, BQ datasets, Cloud Run Job `extract-moengage`). dbt models built (`stg_moengage_campaigns`, `stg_moengage_campaign_stats`, `mart_moengage_push`, `mart_moengage_campaign_analytics`). pipeline.yaml runs all three extracts (AppsFlyer + MoEngage + Play Console) in parallel; full-pipeline dbt run is PASS=140 WARN=0 ERROR=0.
 
-**Play Console** - FULLY DONE (2026-06-22). Ingestion code (16 tests PASS) + GCP infra (SA, secret, BQ datasets, Cloud Run Job) + dbt models (7 staging + 2 mart, PASS=140 WARN=0 ERROR=0 E2E verified) + pipeline.yaml (3 parallel branches, Workflow rev 000012-e43). Uses SA key from client prod project `pgd-prd-digital-rating-tring` stored in Secret Manager.
+**Play Console** - FULLY DONE (2026-06-22, updated 2026-07-21). Ingestion code (16 tests PASS) + GCP infra (SA, secret, BQ datasets, Cloud Run Job) + dbt models (7 staging + 2 mart + 3 GCS staging + 1 GCS mart, PASS=205 WARN=0 ERROR=0 E2E verified) + pipeline.yaml (3 parallel branches, Workflow rev 000012-e43). Uses SA key from client prod project `pgd-prd-digital-rating-tring` stored in Secret Manager. GCS stats (installs/store_performance/crashes) ingested via `--gcs-stats` flag; 983 rows Jan–Jun 2026 backfilled. SA needs `roles/storage.objectViewer` on GCS bucket for Cloud Run prod (pending admin Pegadaian grant).
 
 > **Adding an endpoint to a source that already exists** (one more AppsFlyer report, one more Play Console metric set, one more MoEngage call) is a smaller job - you do not create a new SA, secret, job, or dataset. See `docs/adding-endpoints.md` for that. The steps below are for a brand new source (a new vendor).
 
