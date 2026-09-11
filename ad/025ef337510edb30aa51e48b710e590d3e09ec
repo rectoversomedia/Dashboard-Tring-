@@ -1,0 +1,55 @@
+ingestion/src/tring_ingest/cli.py
+  s_5627001f0923c9::t_ba24abc3c713d7 28-33
+  s_5627001f0923c9::t_8c0f61235b6e88 70-73
+ingestion/src/tring_ingest/sources/play_console/gcs_reviews.py
+  s_5627001f0923c9::t_90e712d1f4061c 32-35
+  s_5627001f0923c9::t_e741a54616667a 54-67,71-75,81-83,88-89
+  s_5627001f0923c9::t_65c285b42a4c98 10-11
+  s_5627001f0923c9::t_27905ef77fe2f5 1-9,12-31,36-53,68-70,76-80,84-87,90-110
+transform/models/staging/play_console/stg_play_console_gcs_reviews.sql
+  s_5627001f0923c9::t_ccd194d960bc7c 1-70
+transform/models/staging/play_console/_play_console_sources.yml
+  s_5627001f0923c9::t_14f3764928ca45 85-94,97
+  s_5627001f0923c9::t_934752dfc8603f 84
+  s_5627001f0923c9::t_aec335dc4c5aec 95-96
+transform/models/marts/play_console/mart_play_console_gcs_reviews.sql
+  s_5627001f0923c9::t_25891db71ef71f 1-36
+ingestion/src/tring_ingest/sources/appsflyer/extract.py
+  s_5627001f0923c9::t_2ca6bf15cb7787 2-7,10,16-18,21-22,27-82,87-92
+ingestion/src/tring_ingest/common/config.py
+  s_5627001f0923c9::t_2ad595c9aada6f 70-72
+  s_5627001f0923c9::t_844e7028d45a2e 21-40
+transform/models/dashboard/dash_models.yml
+  s_5627001f0923c9::t_c5a5a89eea520b 27-31,44-74
+  s_5627001f0923c9::t_906e357b84d778 75
+transform/models/dashboard/dash_rating_distribution_daily.sql
+  s_5627001f0923c9::t_cfb700e251c930 1-45
+ingestion/src/tring_ingest/sources/play_console/gcs_stats.py
+  s_5627001f0923c9::t_9f03fbb4825ebd 41-50
+  s_5627001f0923c9::t_d07d06ce4116db 3,8
+transform/dbt_project.yml
+  s_5627001f0923c9::t_1c02fcd82bf235 134-135
+  s_5627001f0923c9::t_9cecdcc4d33123 60,62,96,98,100-104
+  s_5627001f0923c9::t_9005655dbabe37 59
+  s_5627001f0923c9::t_9f49c2d455839a 61
+  s_5627001f0923c9::t_fd445e13147faa 63
+  s_5627001f0923c9::t_71342b93094700 95
+  s_5627001f0923c9::t_a653a58ef08eac 97
+  s_5627001f0923c9::t_6036fdf16df8af 99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ad025ef337510edb30aa51e48b710e590d3e09ec",
+  "prompts": {},
+  "sessions": {
+    "s_5627001f0923c9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4817a3de-6a41-46b8-8161-317beb366c42",
+        "model": "claude-opus-5"
+      },
+      "human_author": "FirzaCank <firzasandjaya@gmail.com>"
+    }
+  }
+}
