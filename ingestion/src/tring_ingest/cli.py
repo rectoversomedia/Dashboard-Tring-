@@ -25,6 +25,12 @@ def parse_args(argv=None):
         dest="gcs_stats",
         help="ingest Play Console GCS stats (installs/crashes/store_performance)",
     )
+    parser.add_argument(
+        "--gcs-reviews",
+        action="store_true",
+        dest="gcs_reviews",
+        help="ingest Play Console GCS review exports (includes rating-only reviews)",
+    )
     args = parser.parse_args(argv)
     if not args.snapshot and (not args.date_from or not args.date_to):
         parser.error("--from/--to required (or set DATE_FROM/DATE_TO env vars)")
@@ -61,6 +67,10 @@ def main(argv=None):
             from tring_ingest.sources.play_console.gcs_stats import run_gcs_stats
 
             run_gcs_stats(date_from=args.date_from, date_to=args.date_to)
+        elif args.gcs_reviews:
+            from tring_ingest.sources.play_console.gcs_reviews import run_gcs_reviews
+
+            run_gcs_reviews(date_from=args.date_from, date_to=args.date_to)
         else:
             from tring_ingest.sources.play_console.extract import run
 

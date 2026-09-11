@@ -2,6 +2,8 @@
 
 Status: **FULLY DONE (2026-06-28)** - ingestion code, GCP infra, dbt models, pipeline.yaml, E2E all verified. Raw: 3,580 rows across 7 tables. dbt: PASS=140 WARN=0 ERROR=0. Vitals dimensions expanded 2026-06-28: added deviceModel, apiLevel, countryCode to all 6 metric sets (errorCountMetricSet: deviceModel + apiLevel only, countryCode not supported by API).
 
+**2026-07-26 addition:** manual DAU (real, user-level) — see "Manual DAU" section near the bottom of this file. Ad hoc loaded, not part of the scheduled pipeline.
+
 Data model diagram: `PlayConsole_v1.drawio` at repo root (`tring-repo/PlayConsole_v1.drawio`). Open at [diagrams.net](https://app.diagrams.net), export PNG, attach to Confluence TSD Section 5.
 
 ---
@@ -20,6 +22,7 @@ Data model diagram: `PlayConsole_v1.drawio` at repo root (`tring-repo/PlayConsol
 | Daily installs/uninstalls | `play_raw.raw_gcs_installs` | GCS CSV export (`stats/installs/`) | date + daily_device_installs + daily_device_uninstalls + 4 meta |
 | Store listing performance | `play_raw.raw_gcs_store_performance` | GCS CSV export (`stats/store_performance/`) | date + country + store_listing_visitors + store_listing_impressions + store_listing_acquisitions + store_listing_conversion_rate + 4 meta |
 | Absolute crash/ANR counts | `play_raw.raw_gcs_crashes` | GCS CSV export (`stats/crashes/`) | date + daily_crashes + daily_anrs + 4 meta |
+| Manual DAU (real, user-level) | `play_raw.raw_dau_manual` | Play Console UI export (manual, ad hoc) | date + country + dau + notes + 2 meta |
 
 ---
 
@@ -294,6 +297,8 @@ Views. Dedup by natural key on latest `_ingested_at`. All STRING fields cast to 
 
 > `stg_play_console_reviews` does not include `_extract_from`/`_extract_to` meta columns. Reviews are not date-scoped (the API returns all reviews regardless of date range), so these columns have no meaningful value for reviews and are intentionally omitted.
 
+| `stg_play_console_dau_manual` | date x country | dau (real DAU, ad hoc loaded, not on the extract schedule) |
+
 ### Mart (play_mart dataset)
 
 Tables. Full refresh each run. Partitioned + clustered for query efficiency.
@@ -302,6 +307,7 @@ Tables. Full refresh each run. Partitioned + clustered for query efficiency.
 |---|---|---|---|
 | `mart_play_console_app_health` | date x version_code x device_model x api_level x country_code | date | FULL OUTER JOIN of crash/ANR/wakelock/wakeup rates in one wide table. CI bounds included for crash rate and ANR rate. |
 | `mart_play_console_reviews` | review_id | review_date | All reviews with `has_developer_reply` and `is_negative_review` flags |
+| `mart_play_console_dau_manual` | date x country | date | Real, user-level DAU from a manual Play Console UI export. Android only. Ad hoc loaded -- see "Manual DAU" section below. |
 
 ---
 
@@ -314,3 +320,71 @@ Tables. Full refresh each run. Partitioned + clustered for query efficiency.
 - **Confidence intervals only for crash rate and ANR rate:** Only `crashRateMetricSet` and `anrRateMetricSet` return CI bounds in practice (verified live and against the raw BQ table schemas 2026-06-22). Stuck bg wakelock, excessive wakeup, and slow start rate do NOT return CI columns. `errorCountMetricSet` also has no CI. The ingestion code handles both cases (only writes CI columns when the API returns them), so raw table schemas differ per metric set.
 - **SA key rotation:** Unlike API tokens, the Play Console SA key is a full JSON file. Follow the rotation procedure in `docs/runbook.md` section 7 carefully (generate new key, add to Secret Manager, delete old key from GCP IAM).
 - **Acquisition metrics (installs, users, store listing) come from GCS CSV export, NOT the REST API:** Daily Installs, Total Installs, New Users, Active Users, Store Listing Visitors, Store Listing Acquisitions, and Conversion Rate are only available via Google Play's GCS CSV export (not through the Play Developer Reporting API). Google Play automatically exports these as monthly CSV files to a private GCS bucket (`gs://pubsite_prod_rev_<account_id>/stats/installs/` and `.../stats/store_performance/`). Files are UTF-16 LE encoded and have a 3-7 day lag. **This is now implemented** via `--gcs-stats` flag in `cli.py` (`ingestion/src/tring_ingest/sources/play_console/gcs_stats.py`). Bucket name configured via `GCS_BUCKET_PLAY_CONSOLE` env var. Auth via ADC (local) / SA (Cloud Run). SA must be granted `roles/storage.objectViewer` on the bucket via Play Console Settings (admin Pegadaian to grant `sa-extract-play-console@$PROJECT.iam.gserviceaccount.com`). Raw tables: `play_raw.raw_gcs_installs`, `play_raw.raw_gcs_store_performance`, `play_raw.raw_gcs_crashes`. dbt: 3 staging + 1 mart (`mart_play_console_gcs_stats`). E2E verified 2026-07-21: 983 rows Jan–Jun 2026. dbt PASS=205 WARN=0.
+
+---
+
+## Manual DAU (real, user-level) — no API, no GCS path (added 2026-07-26)
+
+Play Console has a real, absolute **Daily Active Users (DAU)** metric (category **Engagement**, not Users/Devices), unique users per day, breakdown by country. Confirmed working in the UI: metric ID `ENGAGEMENT_DAILY_ACTIVE_USERS-ACQUISITION_UNSPECIFIED-UNIQUE-PER_INTERVAL-DAY`.
+
+**Neither the Play Developer Reporting API nor the GCS bulk stats export exposes this metric:**
+- The Reporting API only has the 6 quality metric sets in this doc's Overview table (crash/ANR/wakelock/wakeup/error/slow-start) — no active-users endpoint exists.
+- The GCS `stats/installs/*_overview.csv` export (`active_device_installs` column, in `stg_play_console_gcs_installs`) is a **rolling 30-day** device-level figure (same family as the UI's "Installed audience"), not a single-day active count.
+- The only way to get this number is a manual export from Play Console UI (Statistics tab, filter "Daily Active Users (DAU)", Export report → CSV). It is **not automatable** without Firebase Analytics integration (out of scope, see `HANDOFF_Latest.md`).
+
+⚠️ **Google's own UI shows this banner on the DAU report:** "Some Daily Active Users (DAU) data is currently unavailable. We're working on fixing this issue." Treat gaps in the export as expected, not as a pipeline bug.
+
+🔴 **~50x gap vs `mart_appsflyer_daily_active_devices` (Android), not yet explained.** Play Console DAU for Indonesia runs ~500-600k/day; AppsFlyer's Android device count runs ~9k/day. Do not treat either number as ground truth until this is investigated — likely causes are an AppsFlyer SDK/attribution gap (undercounting sessions) or a looser Play Console "active" definition (device check-in to Google services vs a literal app open). No independent validation source (e.g. backend session logs) has been checked yet.
+
+**Android only** — Play Console has no such metric for iOS.
+
+### Table
+
+- `play_raw.raw_dau_manual` — `date DATE, country STRING, dau INT64, notes STRING, _ingested_at TIMESTAMP, _source STRING`. Loaded ad hoc, no freshness check.
+- `play_staging.stg_play_console_dau_manual` — dedup `qualify row_number() over (partition by date, country order by _ingested_at desc) = 1`.
+- `play_mart.mart_play_console_dau_manual` — `date, platform='android', country, daily_active_users, notes`. `country = 'all'` is Google's own global figure, not a sum of the per-country rows (it may include countries not broken out separately in the export).
+
+### Load SOP (repeat for every new CSV export)
+
+One-time setup:
+```bash
+bq query --use_legacy_sql=false '
+CREATE TABLE IF NOT EXISTS `dashboard-tring.play_raw.raw_dau_manual` (
+  date DATE, country STRING, dau INT64, notes STRING,
+  _ingested_at TIMESTAMP, _source STRING)
+PARTITION BY date CLUSTER BY country'
+```
+
+Per export (example for the 2-column "All countries + Indonesia" filter; add `dau_my`/`dau_jp`/`dau_sg` to `--schema` and the `UNPIVOT` list if the export includes more countries — keep the same country filter every time so the CSV column layout stays predictable):
+```bash
+mv "./All countries*.csv" ./dau_manual_latest.csv
+
+bq load --replace --skip_leading_rows=1 --source_format=CSV \
+  --schema=date_str:STRING,dau_all:STRING,dau_id:STRING,notes:STRING \
+  dashboard-tring:play_raw._tmp_dau_manual ./dau_manual_latest.csv
+
+bq query --use_legacy_sql=false '
+INSERT INTO `dashboard-tring.play_raw.raw_dau_manual`
+SELECT
+  PARSE_DATE("%b %e, %Y", date_str) AS date,
+  country,
+  CAST(REPLACE(dau_val, ",", "") AS INT64) AS dau,
+  notes,
+  CURRENT_TIMESTAMP() AS _ingested_at,
+  "play_console_manual_csv" AS _source
+FROM `dashboard-tring.play_raw._tmp_dau_manual`
+UNPIVOT(dau_val FOR country IN (dau_all AS "all", dau_id AS "ID"))'
+
+bq query --use_legacy_sql=false 'DROP TABLE IF EXISTS `dashboard-tring.play_raw._tmp_dau_manual`'
+
+# rebuild staging (dedup) + mart to pick up the new raw rows
+gcloud run jobs execute dbt-transform --region=asia-southeast2 --project=dashboard-tring --wait
+
+rm ./dau_manual_latest.csv
+```
+
+**Why `--schema` instead of `--autodetect`:** `bq load --autodetect` sanitizes CSV header text with spaces/parens/colons into unpredictable column names. The Play Console export header (`"Daily Active Users (DAU) (Unique users, Per interval, Daily): Indonesia"`) would not survive as a literal column name, so an explicit schema keeps column names stable across loads regardless of what Google names the export.
+
+**Why overlapping date ranges across exports are safe:** raw is append-only with `_ingested_at`; staging dedups to the latest ingest per `(date, country)`. Re-exporting a range that includes already-loaded dates (e.g. Google revises a day's DAU after the fact) is expected and self-corrects on the next `dbt-transform` run — verified live 2026-07-26 (18-day overlap between two loads produced exactly 196 rows per country, not 214).
+
+**Cadence:** not yet decided (daily/weekly/monthly all work mechanically — the SOP is idempotent regardless of frequency).

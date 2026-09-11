@@ -116,6 +116,27 @@ models:
               config:
                 severity: warn
 
+  - name: mart_appsflyer_daily_active_devices
+    description: >
+      Daily active devices (DAD) grain: date x platform. DEVICE-level count
+      (distinct appsflyer_id with an app-open event), NOT user-level DAU. Use as a
+      DAU proxy only. Person-level DAU requires MoEngage user_id (not built).
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+      - name: platform
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ['android', 'ios']
+      - name: daily_active_devices
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+
   - name: mart_appsflyer_fraud
     description: "Fraud grain: date x media_source x campaign x platform x country."
     columns:

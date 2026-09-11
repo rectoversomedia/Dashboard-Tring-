@@ -68,3 +68,26 @@ models:
               inclusive: true
               config:
                 severity: warn
+
+  - name: mart_play_console_dau_manual
+    description: "Manual DAU (real, user-level) from Play Console UI export. Android only. Ad hoc loaded, not on the extract schedule. Grain: one row per date x country."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: ["date", "country"]
+    columns:
+      - name: date
+        data_tests:
+          - not_null
+      - name: country
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["all", "ID", "MY", "JP", "SG"]
+      - name: daily_active_users
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                severity: warn

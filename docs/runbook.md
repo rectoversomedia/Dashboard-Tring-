@@ -98,7 +98,7 @@ Key lines to look for:
 - `reviews: N rows` + per-report log lines (one per Analytics report)
 - `Extract failed for: [...]` → collect-errors pattern; one or more reports failed, others still loaded
 
-**Step 3  -  Check dbt logs (look for PASS=140 ERROR=0):**
+**Step 3  -  Check dbt logs (look for PASS=211 ERROR=0):**
 ```bash
 gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="dbt-transform"' \
   --project=$PROJECT \
@@ -108,7 +108,7 @@ gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name=
 ```
 
 Key lines to look for:
-- `Done. PASS=205 WARN=0 ERROR=0` → success (4 sources incl. GCS stats)
+- `Done. PASS=211 WARN=0 ERROR=0` → success (4 sources incl. GCS stats; verified 2026-07-25, was 205 before `mart_appsflyer_daily_active_devices` added 1 model + 5 tests)
 - `Done. PASS=XX ERROR=N` → test failures, check which model
 
 **Step 4  -  Check execution list (optional):**
@@ -376,6 +376,46 @@ AppsFlyer limits: `in_app_events` 12 calls/day/app, `installs` 24/day/app. When 
 - To increase limit: client contacts AppsFlyer CSM (hello@appsflyer.com)
 - Reference: https://support.appsflyer.com/hc/en-us/articles/207034366
 
+### The second, quieter limit: 200,000 rows per response
+
+Separate from the call quota, a raw-data response is capped at **200,000 rows by default**, and
+an over-cap window is **silently truncated to its most recent rows**  -  HTTP 200, no warning.
+Android `in_app_events` exceeds that daily, so a date-only request was returning only the last
+~3.5 hours of each day. Discovered 2026-07-25; full analysis in
+`data-catalog-appsflyer.md` -> "Two Independent Hard Limits on Raw Data Pulls".
+
+**How to spot it:** compare the hours actually present against a full day.
+
+```sql
+SELECT event_date, _platform AS platform, COUNT(*) AS rows_,
+       FORMAT_TIMESTAMP('%H:%M', MIN(event_time)) AS first_event,
+       FORMAT_TIMESTAMP('%H:%M', MAX(event_time)) AS last_event
+FROM `your-project.appsflyer_staging.stg_appsflyer_in_app_events`
+WHERE event_date BETWEEN 'YYYY-MM-DD' AND 'YYYY-MM-DD'
+GROUP BY 1, 2 ORDER BY 1, 2
+```
+
+A row count of exactly 200,000 combined with a first_event late in the day means truncation, not
+a quiet morning. iOS stays under the cap and shows a full 00:00-23:59 span.
+
+### Two env var knobs for this
+
+Both optional, both on the `extract-appsflyer` job:
+
+| Env var | Default | What it does |
+|---|---|---|
+| `APPSFLYER_MAXIMUM_ROWS` | `1000000` | Rows requested per raw-data report. AppsFlyer documents 1M as the ceiling. Costs no extra calls, so it does not touch the quota. The intended fix for truncation. |
+| `APPSFLYER_CHUNK_HOURS` | `0` (off) | Splits each day into slices of N hours, one call per slice. **Leave off.** Hourly slicing (24 calls) blows the 12-call quota, and the slice sizes that fit the quota are too big to stay under the row cap. Fallback only. |
+
+```bash
+gcloud run jobs update extract-appsflyer \
+  --update-env-vars=APPSFLYER_MAXIMUM_ROWS=1000000 \
+  --region=asia-southeast2 --project=$PROJECT
+```
+
+The extractor logs an ERROR for any pull that comes back sitting on the row cap, so truncation is
+visible in Cloud Run logs instead of silent. Search job logs for `row cap`.
+
 ---
 
 ## 10. Known behavior: Play Console Reporting API uses exclusive endTime
@@ -638,10 +678,12 @@ BigQuery charges by the amount of data scanned per query (on-demand pricing: ~$5
 | `mart_appsflyer_user_quality` | `appsflyer_mart` | `date` (DATE) | `media_source`, `campaign`, `platform` |
 | `mart_appsflyer_retention` | `appsflyer_mart` | `cohort_date` (DATE) | `media_source`, `campaign`, `platform` |
 | `mart_appsflyer_fraud` | `appsflyer_mart` | `date` (DATE) | `media_source`, `campaign`, `platform` |
+| `mart_appsflyer_daily_active_devices` | `appsflyer_mart` | `date` (DATE) | `platform` |
 | `mart_moengage_push` | `moengage_mart` | `stats_date_from` (DATE) | `platform`, `channel` |
 | `mart_moengage_campaign_analytics` | `moengage_mart` | `stats_date_from` (DATE) | `platform`, `channel` |
 | `mart_play_console_app_health` | `play_mart` | `date` (DATE) | `version_code` |
 | `mart_play_console_reviews` | `play_mart` | `review_date` (DATE) | `star_rating` |
+| `mart_play_console_dau_manual` | `play_mart` | `date` (DATE) | `country` |
 
 **Partition** = BigQuery splits the table into separate storage chunks by date. A query with `WHERE date = '2026-06-01'` only scans that one chunk, not the whole table.
 

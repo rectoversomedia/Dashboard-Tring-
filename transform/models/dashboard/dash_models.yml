@@ -24,7 +24,11 @@ models:
         description: "Count of 5-star reviews"
 
   - name: dash_rating_distribution
-    description: "Star rating distribution (count + percentage) per platform. Looker: bar chart of pct by rating, filtered by platform."
+    description: >
+      DEPRECATED -- use dash_rating_distribution_daily. Has no date column, so Looker
+      date range controls are silently ignored, and its Android side reads the API-backed
+      mart which never receives rating-only reviews (understates avg rating by ~1 star).
+      Kept only until the Looker chart is rewired.
     columns:
       - name: platform
         description: "android or ios"
@@ -36,6 +40,38 @@ models:
         description: "Total reviews for this platform (for pct denominator)"
       - name: pct
         description: "Fraction of reviews with this rating (0-1). Multiply by 100 in Looker for %."
+
+  - name: dash_rating_distribution_daily
+    description: >
+      Star rating distribution per day per platform. Android sourced from the GCS review
+      export, so rating-only reviews (no text) are included and the date is the true submit
+      date. Looker: filter by date range, compute percentage as review_count / SUM(review_count).
+    columns:
+      - name: date
+        description: "Review submit date (Android) / review date (iOS)"
+        tests:
+          - not_null
+      - name: platform
+        description: "android or ios"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['android', 'ios']
+      - name: rating
+        description: "Star rating (1-5)"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5]
+              quote: false
+      - name: review_count
+        description: "Reviews with this rating on this date"
+        tests:
+          - not_null
+      - name: with_text_count
+        description: "Subset of review_count that has review text"
+      - name: rating_only_count
+        description: "Subset of review_count with a star rating but no text. Always 0 for iOS."
 
   - name: dash_acquisition_by_app_version
     description: "iOS downloads + sessions per app_version per day. Android not available via REST API."

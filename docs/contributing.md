@@ -28,7 +28,7 @@ git checkout -b feature/your-feature   # e.g. feature/add-appsflyer-endpoint
 
 **Step 2 - Make changes + run local checks**
 ```bash
-make test    # 38 tests + dbt parse
+make test    # 63 tests + dbt parse
 make lint    # ruff
 ```
 

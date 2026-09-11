@@ -18,6 +18,26 @@ APPSFLYER_APP_IDS = [
 
 APPSFLYER_TIMEZONE = "Asia/Jakarta"
 
+# Rows requested per raw-data report. The API defaults to 200,000 and answers an over-cap
+# window with only its MOST RECENT rows  -  no error, no warning. That silently reduced a full
+# Android day to its last ~3.5 hours (verified 2026-07-25: a date-only request returned exactly
+# 200,000 rows spanning only 20:00-23:59). AppsFlyer documents 1M rows per request as the
+# ceiling, and this parameter is accepted by the API, so asking for 1M should cover a whole day
+# in one request. NOT yet proven to actually lift the cap  -  see APPSFLYER_CHUNK_HOURS.
+APPSFLYER_MAXIMUM_ROWS = int(os.environ.get("APPSFLYER_MAXIMUM_ROWS", "1000000"))
+
+# Row ceiling of a single raw-data report response, used to flag pulls that came back truncated.
+APPSFLYER_RAW_REPORT_ROW_CAP = 200_000
+
+# Splits each day into slices of this many hours for in-app events, one request per slice.
+# DISABLED (0) on purpose: AppsFlyer also caps the NUMBER of report downloads per day per app,
+# and hourly slicing blows through it  -  verified 2026-07-25, the 11th in-app-events pull of the
+# day returned HTTP 400 "You've reached your maximum number of in-app event reports that can be
+# downloaded today for this app". Only turn this on if APPSFLYER_MAXIMUM_ROWS turns out not to
+# lift the row cap, and then keep slices few enough to stay inside the daily download quota
+# (roughly 24 per report type per account, so ~12 per app across the two apps).
+APPSFLYER_CHUNK_HOURS = int(os.environ.get("APPSFLYER_CHUNK_HOURS", "0"))
+
 # master-agg params, taken from the working postman collection
 APPSFLYER_MASTER_AGG_GROUPINGS = "pid,c,install_time,geo"
 APPSFLYER_MASTER_AGG_KPIS = "impressions,clicks,installs,cost"
@@ -47,7 +67,9 @@ PLAY_CONSOLE_SECRET_NAME = os.environ.get("PLAY_CONSOLE_SECRET_NAME", "play-cons
 GCS_BUCKET_PLAY_CONSOLE = os.environ.get(
     "GCS_BUCKET_PLAY_CONSOLE", "pubsite__rev_00060605014151750029"
 )
-PLAY_CONSOLE_PACKAGE_NAME = os.environ.get("PLAY_CONSOLE_PACKAGE_NAME", "co.id.pegadaian.aralia")
+# Must match endpoints.PACKAGE_NAME -- the bucket holds 21 Pegadaian packages and
+# co.id.pegadaian.aralia is a different, near-empty app (52 installs/day vs 17k).
+PLAY_CONSOLE_PACKAGE_NAME = os.environ.get("PLAY_CONSOLE_PACKAGE_NAME", "com.pegadaiandigital")
 
 # App Store Connect
 BQ_DATASET_RAW_APPSTORE = os.environ.get("BQ_DATASET_RAW_APPSTORE", "appstore_raw")

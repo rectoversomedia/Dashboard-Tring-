@@ -64,20 +64,25 @@ What it does: exits with error if any file would be reformatted. Used in CI to b
 uv run pytest tests/ -v
 ```
 
-What it does: runs all test cases in `tests/`. The `-v` flag shows each test name and pass/fail individually. Current suite: 49 tests total (10 AppsFlyer + 12 MoEngage + 16 Play Console + 11 App Store), all PASS.
+What it does: runs all test cases in `tests/`. The `-v` flag shows each test name and pass/fail individually. Current suite: **63 tests total** (20 AppsFlyer + 13 MoEngage + 16 Play Console + 11 App Store + 3 BQ loader), all PASS.
 
 ### Test cases covered
 
-**AppsFlyer (`test_appsflyer_extract.py`) - 10 tests:**
+**AppsFlyer (`test_appsflyer_extract.py`) - 20 tests:**
 
 | Test class | Tests | What it tests |
 |---|---|---|
-| `TestEndpoints` | 5 | Endpoint count = 4, correct names, correct BQ table names, timezone param present, geo grouping in master-agg |
+| `TestEndpoints` | 7 | Endpoint count = 4, correct names, correct BQ table names, timezone param present, geo grouping in master-agg, hour chunking disabled by default, `maximum_rows=1_000_000` sent for in_app_events |
+| `TestBuildWindows` | 6 | No chunking = single date-only window; hourly chunking covers every hour of each day; slices neither overlap nor skip (`HH:00`-`HH:59`) across 1/2/4/6-hour sizes; a chunk size not dividing 24 still ends at hour 23; rejects reversed date range; rejects chunk_hours outside 1-24 |
 | `TestBqLoader` | 2 | Empty CSV returns 0 rows, all metadata columns stamped on rows |
-| `TestExtractRun` | 2 | 8 HTTP pulls fired (4 endpoints x 2 app IDs), raises error when any pull fails |
+| `TestExtractRun` | 4 | 8 HTTP pulls fired with chunking off (4 endpoints x 2 app IDs); `_extract_from`/`_extract_to` stay day-level (they are DATE columns, hour slices go to the API only); a pull that hits the 200k row cap is logged loudly but is not fatal; raises when any pull fails |
 | `TestHttpRetry` | 1 | Retryable HTTP status triggers retry path |
 
-**MoEngage (`test_moengage_extract.py`) - 12 tests:**
+> `TestBuildWindows` and the cap-logging test exist because of the truncation bug found 2026-07-25
+> (see `data-catalog-appsflyer.md` -> "Two Independent Hard Limits on Raw Data Pulls"). Hour
+> chunking ships **disabled**; the tests cover it as a fallback that is ready but not active.
+
+**MoEngage (`test_moengage_extract.py`) - 13 tests:**
 
 | Test class | Tests | What it tests |
 |---|---|---|

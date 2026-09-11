@@ -34,6 +34,29 @@ Cloud Scheduler (timer, 2x/day)
 
 > **App Store source status (2026-06-28):** ingestion + transform code DONE (endpoints.py, extract.py, 10 tests, 6 staging + 3 mart dbt models, pipeline.yaml 4th branch, cloudbuild, Makefile). GCP infra NOT yet provisioned. See `data-catalog-appstore.md`.
 
+> 🔴 **AppsFlyer in_app_events data quality (2026-07-25):** two confirmed bugs affect every metric
+> derived from Android in-app events. (1) The Pull API caps a response at 200,000 rows and
+> silently returns only the most recent ones, so an Android day arrives as ~3.5 evening hours
+> rather than 24 hours. (2) `stg_appsflyer_in_app_events` was not deduplicating, inflating
+> `countif()` metrics 3-4x. Fixes are written but **not deployed**. Affects
+> `mart_appsflyer_user_quality`, `mart_appsflyer_retention`, and
+> `mart_appsflyer_daily_active_devices` (Android series only  -  iOS is correct in all three).
+> Read `data-catalog-appsflyer.md` -> "Two Independent Hard Limits on Raw Data Pulls" before
+> trusting or publishing any Android in-app-events number.
+
+> **Daily Active Devices (2026-07-25):** `appsflyer_mart.mart_appsflyer_daily_active_devices` is
+> a DAU **proxy**, grain `date` x `platform`. It counts **devices** (`appsflyer_id`), not
+> people, so label it "Daily Active Devices" and never "DAU". No `dash_*` table exposes it yet;
+> Looker reads it straight from the mart. See `data-catalog-appsflyer.md` -> "Known Metric
+> Behavior".
+
+> 🆕 **Real Daily Active Users, Play Console, manual (2026-07-26):** Play Console UI has an
+> actual user-level DAU metric (category Engagement) with no API or GCS path -- export is
+> manual only. Loaded into `play_mart.mart_play_console_dau_manual`, Android only, ad hoc
+> (not on the extract schedule). Runs roughly **50x higher** than the AppsFlyer device proxy
+> above, for reasons not yet investigated -- do not treat either number as authoritative until
+> that gap is explained. See `data-catalog-play-console.md` -> "Manual DAU".
+
 ---
 
 ## Glossary

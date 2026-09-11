@@ -1,9 +1,11 @@
 import csv
 import io
+import os
 from datetime import date, timedelta
 
 from google.cloud import storage
 from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials as OAuthCredentials
 
 from tring_ingest.common.bq_loader import load_json_rows_to_raw
 from tring_ingest.common.config import (
@@ -36,6 +38,16 @@ def _make_gcs_client(sa_key_json: str | None = None) -> storage.Client:
         key_data = json.loads(sa_key_json)
         creds = service_account.Credentials.from_service_account_info(key_data, scopes=_GCS_SCOPES)
         return storage.Client(credentials=creds, project=GCP_PROJECT)
+
+    # Escape hatch for local runs: no service account has bucket access yet, so an
+    # operator's own token has to stand in. Set it with
+    #   GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --account=<user>)
+    # Drop this once the SA is granted objectViewer on the bucket.
+    token = os.environ.get("GOOGLE_OAUTH_ACCESS_TOKEN")
+    if token:
+        logger.info("using GOOGLE_OAUTH_ACCESS_TOKEN for GCS (local-run override)")
+        return storage.Client(project=GCP_PROJECT, credentials=OAuthCredentials(token=token))
+
     return storage.Client(project=GCP_PROJECT)
 
 

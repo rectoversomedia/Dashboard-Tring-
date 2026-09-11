@@ -56,6 +56,11 @@ models:
             field: date
             data_type: date
           +cluster_by: ["media_source", "campaign", "platform"]
+        mart_appsflyer_daily_active_devices:
+          +partition_by:
+            field: date
+            data_type: date
+          +cluster_by: ["platform"]
       moengage:
         +tags: ["moengage", "mart"]
         +schema: moengage_mart
@@ -87,6 +92,16 @@ models:
             field: date
             data_type: date
           +cluster_by: ["platform"]
+        mart_play_console_dau_manual:
+          +partition_by:
+            field: date
+            data_type: date
+          +cluster_by: ["country"]
+        mart_play_console_gcs_reviews:
+          +partition_by:
+            field: review_date
+            data_type: date
+          +cluster_by: ["star_rating"]
       app_store:
         +tags: ["app_store", "mart"]
         +schema: appstore_mart
@@ -115,6 +130,8 @@ models:
         +cluster_by: ["platform"]
       dash_rating_distribution:
         +partition_by: null
+        +cluster_by: ["platform", "rating"]
+      dash_rating_distribution_daily:
         +cluster_by: ["platform", "rating"]
       dash_acquisition_by_app_version:
         +cluster_by: ["platform", "app_version"]
