@@ -12,9 +12,9 @@ from tring_ingest.sources.app_store.endpoints import (
     flatten_tsv,
 )
 from tring_ingest.sources.app_store.extract import (
-    _pull_analytics_report,
     _pull_reviews,
     _resolve_report_ids,
+    _stream_analytics_report,
 )
 
 # --- _snake / flatten_tsv ---
@@ -106,7 +106,7 @@ def test_resolve_report_ids_paginates():
     assert ANALYTICS_REPORTS[1]["name"] in result
 
 
-# --- _pull_analytics_report ---
+# --- _stream_analytics_report ---
 
 
 def _make_gzip_tsv(tsv_text: str) -> bytes:
@@ -116,51 +116,67 @@ def _make_gzip_tsv(tsv_text: str) -> bytes:
     return buf.getvalue()
 
 
-def test_pull_analytics_report_downloads_and_flattens():
+def _stream(client):
+    return _stream_analytics_report(
+        client=client,
+        report_id="r3-abc",
+        table="raw_app_downloads",
+        source="app_store",
+        date_from="2026-06-01",
+        date_to="2026-06-02",
+    )
+
+
+def test_stream_analytics_report_streams_segment_to_bq():
     client = MagicMock()
 
-    tsv = "Date\tCounts\n2026-06-01\t10\n2026-06-02\t20"
-    gzip_bytes = _make_gzip_tsv(tsv)
+    gzip_bytes = _make_gzip_tsv("Date\tCounts\n2026-06-01\t10\n2026-06-02\t20")
 
     instances_resp = MagicMock()
-    instances_resp.json.return_value = {
-        "data": [{"id": "inst-1"}],
-        "links": {},
-    }
-    segments_resp = MagicMock()
-    segments_resp.json.return_value = {
-        "data": [{"attributes": {"url": "https://s3.example.com/seg?sig=abc"}}]
+    instances_resp.json.return_value = {"data": [{"id": "inst-1"}], "links": {}}
+    seg_list_resp = MagicMock()
+    seg_list_resp.json.return_value = {"data": [{"id": "seg-1"}]}
+    seg_fresh_resp = MagicMock()
+    seg_fresh_resp.json.return_value = {
+        "data": {"attributes": {"url": "https://s3.example.com/seg?sig=abc"}}
     }
     download_resp = MagicMock()
     download_resp.content = gzip_bytes
 
-    client.get.side_effect = [instances_resp, segments_resp]
+    client.get.side_effect = [instances_resp, seg_list_resp, seg_fresh_resp]
     client.get_unsigned.return_value = download_resp
 
-    rows = _pull_analytics_report(client, "r3-abc")
+    seen = {}
 
-    assert len(rows) == 2
-    assert rows[0]["date"] == "2026-06-01"
-    assert rows[0]["counts"] == "10"
+    def _capture(**kwargs):
+        stream = kwargs["tsv_text"]
+        # must be a file-like object, never a fully materialised str
+        assert not isinstance(stream, str)
+        seen["text"] = stream.read()
+        return 2
+
+    with patch(
+        "tring_ingest.sources.app_store.extract.load_tsv_stream_to_raw", side_effect=_capture
+    ):
+        total = _stream(client)
+
+    assert total == 2
+    assert seen["text"] == "Date\tCounts\n2026-06-01\t10\n2026-06-02\t20"
 
 
-def test_pull_analytics_report_skips_missing_url():
+def test_stream_analytics_report_skips_missing_url():
     client = MagicMock()
 
     instances_resp = MagicMock()
-    instances_resp.json.return_value = {
-        "data": [{"id": "inst-1"}],
-        "links": {},
-    }
-    segments_resp = MagicMock()
-    # segment with no url
-    segments_resp.json.return_value = {"data": [{"attributes": {}}]}
+    instances_resp.json.return_value = {"data": [{"id": "inst-1"}], "links": {}}
+    seg_list_resp = MagicMock()
+    seg_list_resp.json.return_value = {"data": [{"id": "seg-1"}]}
+    seg_fresh_resp = MagicMock()
+    seg_fresh_resp.json.return_value = {"data": {"attributes": {}}}
 
-    client.get.side_effect = [instances_resp, segments_resp]
+    client.get.side_effect = [instances_resp, seg_list_resp, seg_fresh_resp]
 
-    rows = _pull_analytics_report(client, "r3-abc")
-
-    assert rows == []
+    assert _stream(client) == 0
     client.get_unsigned.assert_not_called()
 
 
@@ -218,7 +234,7 @@ def test_pull_reviews_paginates_via_links_next():
 # --- run: collect-errors ---
 
 
-@patch("tring_ingest.sources.app_store.extract.load_json_rows_to_raw")
+@patch("tring_ingest.sources.app_store.extract.load_tsv_stream_to_raw")
 @patch("tring_ingest.sources.app_store.extract.AppStoreClient")
 def test_run_collect_errors_one_report_fails_others_load(mock_client_cls, mock_loader):
     instance = mock_client_cls.return_value
@@ -250,7 +266,11 @@ def test_run_collect_errors_one_report_fails_others_load(mock_client_cls, mock_l
     inst2_resp = MagicMock()
     inst2_resp.json.return_value = {"data": [{"id": "inst-2"}], "links": {}}
     seg2_resp = MagicMock()
-    seg2_resp.json.return_value = {"data": [{"attributes": {"url": "https://s3.example.com/seg"}}]}
+    seg2_resp.json.return_value = {"data": [{"id": "seg-2"}]}
+    seg2_fresh_resp = MagicMock()
+    seg2_fresh_resp.json.return_value = {
+        "data": {"attributes": {"url": "https://s3.example.com/seg"}}
+    }
     dl2_resp = MagicMock()
     dl2_resp.content = gzip_bytes
 
@@ -259,7 +279,8 @@ def test_run_collect_errors_one_report_fails_others_load(mock_client_cls, mock_l
         resolve_resp,  # resolve report ids
         fail_resp,  # report 1 instances -> fails
         inst2_resp,  # report 2 instances
-        seg2_resp,  # report 2 segments
+        seg2_resp,  # report 2 segment list
+        seg2_fresh_resp,  # report 2 fresh signed url
     ]
     instance.get_unsigned.return_value = dl2_resp
 

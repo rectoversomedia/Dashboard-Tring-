@@ -137,7 +137,7 @@ def load_csv_to_raw(
 
 
 def load_tsv_stream_to_raw(
-    tsv_text: str,
+    tsv_text: str | io.TextIOBase,
     dataset_id: str,
     table_id: str,
     source: str,
@@ -146,14 +146,16 @@ def load_tsv_stream_to_raw(
     project_id: str = GCP_PROJECT,
     batch_size: int = 10_000,
 ) -> int:
-    # stream TSV text in batches to avoid holding full segment in RAM.
-    # schema is inferred from header; subsequent batches reuse same schema + job_config.
-    lines = tsv_text.splitlines()
-    if len(lines) < 2:
+    # stream TSV in batches to avoid holding full segment in RAM. accepts a file-like
+    # object (preferred -- never materialises all lines) or a str for callers/tests.
+    src = io.StringIO(tsv_text) if isinstance(tsv_text, str) else tsv_text
+    header_line = src.readline()
+    if not header_line.strip():
         return 0
 
     header = [
-        col.strip().lower().replace(" ", "_").replace("-", "_") for col in lines[0].split("\t")
+        col.strip().lower().replace(" ", "_").replace("-", "_")
+        for col in header_line.rstrip("\n").split("\t")
     ]
     client = bigquery.Client(project=project_id)
     run_id = str(uuid.uuid4())
@@ -185,7 +187,10 @@ def load_tsv_stream_to_raw(
     def _flush(b: list[dict]) -> None:
         client.load_table_from_json(b, table_ref, job_config=job_config).result()
 
-    for line in lines[1:]:
+    for raw_line in src:
+        line = raw_line.rstrip("\n")
+        if not line:
+            continue
         vals = line.split("\t")
         row = {
             col: (vals[i] if i < len(vals) else "")

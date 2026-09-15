@@ -67,44 +67,23 @@ def _stream_analytics_report(
                 if not dl_url:
                     continue
                 raw = client.get_unsigned(dl_url).content
-                with gzip.open(io.BytesIO(raw)) as f:
-                    text = f.read().decode("utf-8")
-                n = load_tsv_stream_to_raw(
-                    tsv_text=text,
-                    dataset_id=BQ_DATASET_RAW_APPSTORE,
-                    table_id=table,
-                    source=source,
-                    date_from=date_from,
-                    date_to=date_to,
-                    project_id=GCP_PROJECT,
-                )
-                del text
+                # decode lazily -- a 1M-row segment as one str OOM'd the container
+                with gzip.open(io.BytesIO(raw), mode="rt", encoding="utf-8") as f:
+                    n = load_tsv_stream_to_raw(
+                        tsv_text=f,
+                        dataset_id=BQ_DATASET_RAW_APPSTORE,
+                        table_id=table,
+                        source=source,
+                        date_from=date_from,
+                        date_to=date_to,
+                        project_id=GCP_PROJECT,
+                    )
+                del raw
                 if n:
                     total += n
                     logger.info(f"loaded {n} rows to {table} (seg {seg_id[:8]})")
         url = data.get("links", {}).get("next")
     return total
-
-
-def _pull_analytics_report(client: AppStoreClient, report_id: str) -> list[dict]:
-    # kept for normal run() which still collects all rows (daily window is small)
-    rows: list[dict] = []
-    url = f"{ep.BASE}/v1/analyticsReports/{report_id}/instances?limit=200"
-    while url:
-        data = client.get(url).json()
-        for inst in data.get("data", []):
-            seg_url = f"{ep.BASE}/v1/analyticsReportInstances/{inst['id']}/segments"
-            segs = client.get(seg_url).json().get("data", [])
-            for seg in segs:
-                dl_url = seg["attributes"].get("url")
-                if not dl_url:
-                    continue
-                raw = client.get_unsigned(dl_url).content
-                with gzip.open(io.BytesIO(raw)) as f:
-                    text = f.read().decode("utf-8")
-                rows.extend(ep.flatten_tsv(text))
-        url = data.get("links", {}).get("next")
-    return rows
 
 
 def run_snapshot(creds: str | None = None) -> None:
@@ -174,19 +153,17 @@ def run(date_from: str, date_to: str, creds: str | None = None) -> None:
 
     for name, (report_id, table) in report_map.items():
         try:
-            rows = _pull_analytics_report(client, report_id)
-            if rows:
-                load_json_rows_to_raw(
-                    rows=rows,
-                    dataset_id=BQ_DATASET_RAW_APPSTORE,
-                    table_id=table,
-                    source="app_store",
-                    date_from=date_from,
-                    date_to=date_to,
-                    project_id=GCP_PROJECT,
-                )
-                total += len(rows)
-            logger.info(f"{name}: {len(rows)} rows -> {table}")
+            # stream per-segment; collecting all rows OOM'd the container at ~1M rows
+            n = _stream_analytics_report(
+                client=client,
+                report_id=report_id,
+                table=table,
+                source="app_store",
+                date_from=date_from,
+                date_to=date_to,
+            )
+            total += n
+            logger.info(f"{name}: {n} rows -> {table}")
         except Exception as exc:
             logger.error(f"{name} failed: {exc}")
             errors.append(table)
